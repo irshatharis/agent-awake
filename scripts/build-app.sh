@@ -30,6 +30,8 @@ codesign "${SIGN_ARGS[@]}" --identifier com.irshatharis.AgentAwake.hook "$APP/Co
 codesign "${SIGN_ARGS[@]}" --identifier com.irshatharis.AgentAwake.helper "$APP/Contents/Helpers/agent-awake-helper"
 codesign "${SIGN_ARGS[@]}" "$APP"
 codesign --verify --deep --strict "$APP"
+# launchd may supply a relative argv[0]. Verify bundle discovery uses the real executable.
+/bin/bash -c 'exec -a Contents/Helpers/agent-awake-helper "$1" --check-bundle' _ "$APP/Contents/Helpers/agent-awake-helper"
 plutil -lint "$APP/Contents/Info.plist" "$APP/Contents/Library/LaunchDaemons/com.irshatharis.AgentAwake.helper.plist"
 mkdir -p dist
 if [ -d 'dist/Agent Awake.app' ]; then mv 'dist/Agent Awake.app' "$STAGING/previous.app"; fi

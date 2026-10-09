@@ -143,7 +143,13 @@ import Darwin
     }
     func enableHelper() {
         do { try helper.register(); helperStatus = helper.status; SMAppService.openSystemSettingsLoginItems() }
-        catch { notice = "Helper registration: \(error.localizedDescription)" }
+        catch {
+            helperStatus = helper.status
+            if helperStatus == .requiresApproval || helperStatus == .enabled {
+                notice = "macOS registered the helper. If it is awaiting approval, enable Agent Awake in Login Items & Extensions."
+                SMAppService.openSystemSettingsLoginItems()
+            } else { notice = "Helper registration: \(error.localizedDescription)" }
+        }
     }
     func setLogin(_ enabled: Bool) {
         do {
@@ -156,7 +162,7 @@ import Darwin
         allowSleep(); busy = true
         helper.release { [weak self] ok, text in
             guard let self else { return }
-            guard ok else { self.busy = false; self.notice = "Sleep restoration must succeed before removal: \(text)"; return }
+            guard ok || PowerSystem.sleepDisabled == false else { self.busy = false; self.notice = "Sleep restoration must succeed before removal: \(text)"; return }
             Task { @MainActor in
                 do {
                     try HookInstaller().uninstall()

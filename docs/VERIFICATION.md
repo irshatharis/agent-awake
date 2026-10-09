@@ -9,11 +9,13 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 - Apple Silicon, macOS 26.6.2; Swift 6.3.3 Command Line Tools.
 - Claude Code 2.1.295; Codex CLI 0.162.0.
 - No Developer ID signing identity available. Local app is ad-hoc signed.
-- Administrator approval and a physical close-lid test have not been completed.
+- The helper is registered, running as root, and communicating through authenticated XPC.
+  Physical close-lid testing is in progress; it is not yet marked passed.
 
 ## Automated checks
 
-Run `scripts/check.sh`. Current coverage:
+Run `scripts/check.sh`: 25 scenarios and 89 assertions pass on the development Mac.
+The initial macOS CI run also passed. Current coverage:
 
 - Both CLI event sequences: session start, submit, tool, permission wait, result, stop, end.
 - Multiple independent sessions, parent completion while a subagent keeps working.
@@ -41,9 +43,18 @@ power settings or prove administrator-approved daemon behavior.
 - Two real Claude sessions ran concurrently through UserPromptSubmit, PreToolUse,
   PostToolUse, and Stop. Both returned successfully; the metadata showed two working
   sessions at once.
-- Full Codex hooks remain dependent on review/trust in `/hooks`.
-- Physical lid/display testing, actual helper SIGKILL recovery, and real charger transitions
-  remain pending. They are not advertised as verified.
+- Codex recognized all 12 hooks. Their exact bundled commands were reviewed and trusted
+  through `/hooks`, without a trust-bypass flag. A real interactive run emitted
+  UserPromptSubmit and Interrupt; metadata switched to interrupted while the CLI stayed open.
+  A background terminal can survive that interruption, confirming the documented coverage gap.
+- The approved helper ran as root and changed SleepDisabled from 0 to 1 on battery during
+  a manual session. Killing the app with SIGKILL restored SleepDisabled=0 in about 0.29 seconds
+  and removed its idle assertion. No Agent Awake display assertion was created.
+- Clean integration removal was exercised on the real configuration: the daemon was
+  unregistered, Agent Awake hooks removed, and the Claude dotfile symlink preserved.
+  Integrations were then reinstalled.
+- Physical lid/display testing is in progress. Actual helper SIGKILL recovery and real
+  charger transitions remain pending. They are not advertised as verified.
 
 ## Lifecycle coverage
 

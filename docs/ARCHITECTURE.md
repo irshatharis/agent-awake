@@ -56,7 +56,9 @@ before the journal is removed. launchd runs the helper at boot and restarts it o
 startup restores an outstanding journal before accepting leases. An expired lease or
 disconnected client also restores. When the helper releases its owned override with the
 lid closed, it asks IOKit for system sleep; with the lid open it leaves idle sleep alone.
-The helper never changes display brightness or display idle settings.
+The helper never changes display brightness or display idle settings. It discovers its
+containing bundle with `_NSGetExecutablePath`, since launchd can pass a relative argv[0].
+The build verifies signature discovery with a deliberately relative argv[0].
 
 This recovery depends on launchd being permitted to run the helper. Forcibly unloading it,
 deleting its app bundle while it owns the setting, or disabling it in System Settings can

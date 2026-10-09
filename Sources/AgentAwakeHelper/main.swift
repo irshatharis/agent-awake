@@ -1,6 +1,8 @@
 import Foundation
 import AwakeCore
 import Darwin
+import MachO
+import os
 
 // Only fixed power-management operations are exposed. No client-supplied paths or commands.
 final class SystemPowerBackend: PowerBackend {
@@ -89,17 +91,28 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
 }
 
 umask(0o077)
+let log = Logger(subsystem: HelperConstants.service, category: "lifecycle")
+var executableSize: UInt32 = 4096
+var executableBuffer = [CChar](repeating: 0, count: Int(executableSize))
+guard _NSGetExecutablePath(&executableBuffer, &executableSize) == 0 else {
+    log.error("Cannot locate helper executable")
+    exit(1)
+}
+let executable = URL(fileURLWithPath: String(cString: executableBuffer)).resolvingSymlinksInPath()
+let app = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+if CommandLine.arguments.contains("--check-bundle") {
+    do { _ = try CodeIdentity.requirement(at: app); print("Bundled app signature verified"); exit(0) }
+    catch { fputs("Bundle signature verification failed.\n", stderr); exit(1) }
+}
 guard geteuid() == 0 else { fputs("Agent Awake helper must be started by launchd.\n", stderr); exit(1) }
 let backend: SystemPowerBackend
 do { backend = try SystemPowerBackend() }
-catch { fputs("Agent Awake helper: unsafe recovery directory.\n", stderr); exit(1) }
+catch { log.error("Unsafe recovery directory"); exit(1) }
 let controller = PowerLeaseController(backend: backend)
 let queue = DispatchQueue(label: "com.irshatharis.AgentAwake.power")
-let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-let app = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 let requirement: String
 do { requirement = try CodeIdentity.requirement(at: app) }
-catch { fputs("Agent Awake helper: bundle authentication failed.\n", stderr); exit(1) }
+catch { log.error("Bundle authentication failed: \(error.localizedDescription, privacy: .public)"); exit(1) }
 let listener = NSXPCListener(machServiceName: HelperConstants.service)
 listener.setConnectionCodeSigningRequirement(requirement)
 let delegate = ListenerDelegate(controller, queue: queue)
@@ -113,4 +126,5 @@ let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: queue)
 termination.setEventHandler { _ = try? controller.release(); exit(0) }
 termination.resume()
 listener.resume()
-RunLoop.main.run()
+log.notice("Power helper listening")
+dispatchMain()

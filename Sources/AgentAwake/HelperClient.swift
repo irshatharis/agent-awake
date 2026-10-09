@@ -65,18 +65,27 @@ import AwakeCore
         onState?(false, false, text, lost, false)
     }
     func release(completion: @escaping (Bool, String) -> Void) {
+        var completed = false
+        let finish: (Bool, String) -> Void = { ok, text in
+            guard !completed else { return }
+            completed = true
+            completion(ok, text)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 6) {
+            finish(false, "Helper release timed out. Its lease expires within 12 seconds.")
+        }
         requestID = UUID(); inFlight = false; requestedAwake = false
         if connection == nil && status != .enabled {
-            completion(true, "No enabled helper connection.")
+            finish(true, "No enabled helper connection.")
             return
         }
         do {
             let connection = try connect()
             let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-                DispatchQueue.main.async { completion(false, error.localizedDescription) }
+                DispatchQueue.main.async { finish(false, error.localizedDescription) }
             } as? PowerHelperProtocol
-            guard let proxy else { completion(false, "Helper unavailable; leave it installed for lease recovery."); return }
-            proxy.release { ok, text in DispatchQueue.main.async { completion(ok, text) } }
-        } catch { completion(false, error.localizedDescription) }
+            guard let proxy else { finish(false, "Helper unavailable; leave it installed for lease recovery."); return }
+            proxy.release { ok, text in DispatchQueue.main.async { finish(ok, text) } }
+        } catch { finish(false, error.localizedDescription) }
     }
 }
