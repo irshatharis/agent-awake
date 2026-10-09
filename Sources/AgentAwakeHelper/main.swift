@@ -1,0 +1,116 @@
+import Foundation
+import AwakeCore
+import Darwin
+
+// Only fixed power-management operations are exposed. No client-supplied paths or commands.
+final class SystemPowerBackend: PowerBackend {
+    private let directory = URL(fileURLWithPath: "/var/db/com.irshatharis.AgentAwake", isDirectory: true)
+    private var journal: URL { directory.appendingPathComponent("restore-sleep") }
+    var disabled: Bool? { PowerSystem.sleepDisabled }
+    var hasJournal: Bool { FileManager.default.fileExists(atPath: journal.path) }
+    init() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        var st = stat()
+        guard lstat(directory.path, &st) == 0, st.st_uid == 0, st.st_mode & S_IFMT == S_IFDIR,
+              st.st_mode & 0o077 == 0 else { throw AwakeError.unsafePath }
+    }
+    func setDisabled(_ value: Bool) throws {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
+        task.arguments = ["-a", "disablesleep", value ? "1" : "0"]
+        task.standardOutput = FileHandle.nullDevice; task.standardError = FileHandle.nullDevice
+        try task.run()
+        let deadline = ProcessInfo.processInfo.systemUptime + 2
+        while task.isRunning && ProcessInfo.processInfo.systemUptime < deadline { usleep(10_000) }
+        if task.isRunning { kill(task.processIdentifier, SIGKILL); throw AwakeError.helper("Power management timed out; recovery will retry.") }
+        guard task.terminationStatus == 0, PowerSystem.sleepDisabled == value else { throw AwakeError.helper("macOS rejected the power setting.") }
+    }
+    func recordJournal() throws {
+        let fd = open(journal.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)
+        guard fd >= 0 else { throw AwakeError.unsafePath }
+        defer { close(fd) }
+        let data = Array("restore SleepDisabled=0\n".utf8)
+        guard Darwin.write(fd, data, data.count) == data.count, fsync(fd) == 0 else { throw AwakeError.helper("Could not save power recovery journal.") }
+        syncDirectory()
+    }
+    func clearJournal() throws {
+        if unlink(journal.path) != 0 && errno != ENOENT { throw AwakeError.helper("Could not clear recovery journal.") }
+        syncDirectory()
+    }
+    private func syncDirectory() {
+        let fd = open(directory.path, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        if fd >= 0 { fsync(fd); close(fd) }
+    }
+    func sleepIfLidClosed() { PowerSystem.requestLidSleep() }
+}
+
+final class ConnectionHandler: NSObject, PowerHelperProtocol {
+    let controller: PowerLeaseController
+    let queue: DispatchQueue
+    init(_ controller: PowerLeaseController, queue: DispatchQueue) { self.controller = controller; self.queue = queue }
+    func renew(awake: Bool, generation: String, withReply reply: @escaping (Bool, Bool, String) -> Void) {
+        guard generation.utf8.count <= 64 else { reply(false, false, "Invalid lease"); return }
+        queue.async { let result = self.controller.renew(awake: awake, generation: generation); reply(result.0, result.1, result.2) }
+    }
+    func release(withReply reply: @escaping (Bool, String) -> Void) {
+        queue.async {
+            do { reply(try self.controller.release(), "Sleep restored") }
+            catch { reply(false, error.localizedDescription) }
+        }
+    }
+}
+final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
+    let controller: PowerLeaseController
+    let queue: DispatchQueue
+    private var active: NSXPCConnection?
+    init(_ controller: PowerLeaseController, queue: DispatchQueue) { self.controller = controller; self.queue = queue }
+    func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        // One app controls the machine-wide power setting. Signed peers are checked by NSXPC itself.
+        guard connection.effectiveUserIdentifier != 0 else { return false }
+        let handler = ConnectionHandler(controller, queue: queue)
+        connection.exportedInterface = NSXPCInterface(with: PowerHelperProtocol.self)
+        connection.exportedObject = handler
+        queue.sync {
+            active?.invalidate()
+            active = connection
+        }
+        connection.invalidationHandler = { [weak self, weak connection] in
+            guard let self else { return }
+            self.queue.async {
+                guard self.active === connection else { return }
+                _ = try? self.controller.release()
+                self.active = nil
+            }
+        }
+        connection.interruptionHandler = connection.invalidationHandler
+        connection.resume()
+        return true
+    }
+}
+
+umask(0o077)
+guard geteuid() == 0 else { fputs("Agent Awake helper must be started by launchd.\n", stderr); exit(1) }
+let backend: SystemPowerBackend
+do { backend = try SystemPowerBackend() }
+catch { fputs("Agent Awake helper: unsafe recovery directory.\n", stderr); exit(1) }
+let controller = PowerLeaseController(backend: backend)
+let queue = DispatchQueue(label: "com.irshatharis.AgentAwake.power")
+let executable = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+let app = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+let requirement: String
+do { requirement = try CodeIdentity.requirement(at: app) }
+catch { fputs("Agent Awake helper: bundle authentication failed.\n", stderr); exit(1) }
+let listener = NSXPCListener(machServiceName: HelperConstants.service)
+listener.setConnectionCodeSigningRequirement(requirement)
+let delegate = ListenerDelegate(controller, queue: queue)
+listener.delegate = delegate
+let timer = DispatchSource.makeTimerSource(queue: queue)
+timer.schedule(deadline: .now(), repeating: 1)
+timer.setEventHandler { controller.tick() }
+timer.resume()
+for sig in [SIGTERM, SIGINT] { signal(sig, SIG_IGN) }
+let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: queue)
+termination.setEventHandler { _ = try? controller.release(); exit(0) }
+termination.resume()
+listener.resume()
+RunLoop.main.run()

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>Label</key><string>com.irshatharis.AgentAwake.helper</string>
+    <key>BundleProgram</key><string>Contents/Helpers/agent-awake-helper</string>
+    <key>MachServices</key><dict><key>com.irshatharis.AgentAwake.helper</key><true/></dict>
+    <key>RunAtLoad</key><true/>
+    <key>KeepAlive</key><true/>
+    <key>ThrottleInterval</key><integer>2</integer>
+    <key>ProcessType</key><string>Interactive</string>
+    <key>AssociatedBundleIdentifiers</key><array><string>com.irshatharis.AgentAwake</string></array>
+</dict></plist>
