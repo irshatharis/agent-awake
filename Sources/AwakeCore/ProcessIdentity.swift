@@ -43,7 +43,7 @@ extension Provider {
     public init?(executablePath path: String) {
         let name = URL(fileURLWithPath: path).lastPathComponent
         if name == "codex" { self = .codex }
-        else if name == "claude" || path.contains("/claude/versions/") { self = .claude }
+        else if name == "claude" || name == "claude.exe" || path.contains("/claude/versions/") { self = .claude }
         else { return nil }
     }
 }
