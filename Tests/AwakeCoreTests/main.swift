@@ -56,7 +56,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Preserve hooks; idempotent install/removal", config.testInstallTwiceAndRemovePreservesForeignHandlersAndSettings),
     ("Preserve dotfile symlink on install and removal", config.testDotfileSymlinkInstallAndRemoval),
     ("Reject malformed configuration", config.testMalformedConfigIsNotOverwritten),
-    ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection)
+    ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection),
+    ("Unreadable session store recovers", config.testUnreadableStoreDoesNotBlockTracking)
 ]
 for (name, test) in tests {
     let before = failures

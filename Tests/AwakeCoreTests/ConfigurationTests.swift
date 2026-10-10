@@ -43,4 +43,18 @@ final class ConfigurationTests {
         try FileManager.default.createSymbolicLink(at: dir.appendingPathComponent("sessions.json"), withDestinationURL: URL(fileURLWithPath: "/etc/hosts"))
         expectThrows(try store.snapshot())
     }
+    func testUnreadableStoreDoesNotBlockTracking() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = LocalStore(directory: dir)
+        try store.prepare()
+        let file = dir.appendingPathComponent("sessions.json")
+        try Data(#"{"version":2,"sessions":{"claude:old:main":{"id":"claude:old:main"}}}"#.utf8).write(to: file)
+        chmod(file.path, 0o600)
+        let me = ProcessIdentity.read(getpid())!
+        let event = try HookEvent(data: Data(#"{"hook_event_name":"UserPromptSubmit","session_id":"s1"}"#.utf8), provider: .claude, process: me)
+        try store.ingest(event)
+        try expectEqual(store.snapshot().sessions.keys.sorted(), ["claude:s1:main"])
+    }
 }
+
