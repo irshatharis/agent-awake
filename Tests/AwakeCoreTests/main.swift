@@ -45,6 +45,10 @@ let tests: [(String, () throws -> Void)] = [
     ("Background completion", activity.testBackgroundWorkAndCompletion),
     ("Privacy allowlist", activity.testPrivacyAllowlist),
     ("Invalid event and PID reuse", activity.testUnknownEventsRejectedAndPIDReusePruned),
+    ("Agent install layouts", activity.testRecognizesEachInstallLayout),
+    ("Permission notification with running tool", activity.testPermissionNotificationDoesNotHideRunningTool),
+    ("Anonymous wait clears when tools finish", activity.testAnonymousWaitClearsWhenToolsFinish),
+    ("Stopped subagents removed", activity.testStoppedSubagentsAreRemoved),
     ("Grace and restart", policy.testGraceNeverExtendsAndNewWorkCancelsIt),
     ("Indefinite, cutoff, charger", policy.testIndefiniteCutoffAndCharger),
     ("Allow sleep and resume", policy.testAllowSleepClearsManualAndPausesUntilResume),
@@ -55,7 +59,9 @@ let tests: [(String, () throws -> Void)] = [
     ("Preserve hooks; idempotent install/removal", config.testInstallTwiceAndRemovePreservesForeignHandlersAndSettings),
     ("Preserve dotfile symlink on install and removal", config.testDotfileSymlinkInstallAndRemoval),
     ("Reject malformed configuration", config.testMalformedConfigIsNotOverwritten),
-    ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection)
+    ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection),
+    ("Unreadable session store recovers", config.testUnreadableStoreDoesNotBlockTracking),
+    ("Partial uninstall keeps failures", config.testUninstallRemovesWhatItCanAndKeepsFailures)
 ]
 for (name, test) in tests {
     let before = failures

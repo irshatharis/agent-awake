@@ -68,7 +68,7 @@ final class ActivityTests {
         store.apply(try event("SubagentStart", fields: ["agent_id": "child1"]))
         store.apply(try event("Stop", fields: ["background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
         store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "job1", "status": "running"]]]))
-        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectTrue(store.sessions["claude:s1:child1"] == nil)
         expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
         expectTrue(store.sessions.values.contains(where: \.isWorking))
         store.apply(try event("Stop", fields: ["background_tasks": []]))
@@ -77,7 +77,7 @@ final class ActivityTests {
         // A child snapshot can be the first evidence of parent background work.
         store = SessionStore()
         store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
-        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectTrue(store.sessions["claude:s1:child1"] == nil)
         expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
         store.apply(try event("TaskCompleted", fields: ["task_id": "job1"]))
         expectFalse(store.sessions.values.contains(where: \.isWorking))
@@ -116,4 +116,52 @@ final class ActivityTests {
         store.prune { $0 == ProcessIdentity(pid: 42, started: 999) }
         expectTrue(store.sessions.isEmpty)
     }
+    func testRecognizesEachInstallLayout() {
+        let layouts: [(String, Provider?)] = [
+            ("/Users/u/.local/share/claude/versions/2.1.296", .claude),
+            ("/opt/homebrew/Caskroom/claude-code/2.1.296/claude", .claude),
+            ("/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe", .claude),
+            ("/opt/homebrew/Caskroom/codex/0.162.0/bin/codex", .codex),
+            ("/usr/local/lib/node_modules/@openai/codex/vendor/aarch64-apple-darwin/codex/codex", .codex),
+            ("/usr/local/bin/node", nil),
+            ("/bin/zsh", nil)
+        ]
+        for (path, provider) in layouts { expectEqual(Provider(executablePath: path), provider, path) }
+    }
+    func testPermissionNotificationDoesNotHideRunningTool() throws {
+        var store = SessionStore()
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "build", "tool_name": "Bash"]))
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "edit", "tool_name": "Edit"]))
+        store.apply(try event("PermissionRequest", fields: ["tool_use_id": "edit"]))
+        store.apply(try event("Notification", fields: ["notification_type": "permission_prompt"]))
+        expectEqual(store.sessions.values.first?.activity, .tool)
+    }
+    func testAnonymousWaitClearsWhenToolsFinish() throws {
+        var store = SessionStore()
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "a"]))
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "b"]))
+        store.apply(try event("PermissionRequest"))
+        store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
+        store.apply(try event("PostToolUse", fields: ["tool_use_id": "b"]))
+        expectEqual(store.sessions.values.first?.activity, .thinking)
+        expectEqual(store.sessions.values.first?.pendingTools, [])
+
+        store = SessionStore()
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "mcp1"]))
+        store.apply(try event("Elicitation"))
+        store.apply(try event("ElicitationResult"))
+        store.apply(try event("PostToolUse", fields: ["tool_use_id": "mcp1"]))
+        expectEqual(store.sessions.values.first?.activity, .thinking)
+        expectEqual(store.sessions.values.first?.pendingTools, [])
+    }
+    func testStoppedSubagentsAreRemoved() throws {
+        var store = SessionStore()
+        store.apply(try event("UserPromptSubmit"))
+        for child in ["c1", "c2", "c3"] {
+            store.apply(try event("SubagentStart", fields: ["agent_id": child]))
+            store.apply(try event("SubagentStop", fields: ["agent_id": child]))
+        }
+        expectEqual(store.sessions.keys.sorted(), ["claude:s1:main"])
+    }
 }
+

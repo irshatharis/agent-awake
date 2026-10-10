@@ -3,7 +3,7 @@ import Foundation
 public protocol PowerBackend: AnyObject {
     var disabled: Bool? { get }
     var hasJournal: Bool { get }
-    var lidClosed: Bool { get }
+    var closedLidWouldSleep: Bool { get }
     func setDisabled(_ value: Bool) throws
     func recordJournal() throws
     func clearJournal() throws
@@ -85,7 +85,7 @@ public final class PowerLeaseController {
     }
     private func updateDisplaySleep() {
         guard requested, let expiry = expiresAt, now() < expiry,
-              backend.disabled == true, backend.lidClosed else {
+              backend.disabled == true, backend.closedLidWouldSleep else {
             resetDisplaySleep()
             return
         }

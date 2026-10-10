@@ -16,7 +16,7 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 
 ## Automated checks
 
-Run `scripts/check.sh`: 29 scenarios and 118 assertions pass on the development Mac.
+Run `scripts/check.sh`: 35 scenarios and 135 assertions pass on the development Mac.
 The [v0.1.1 macOS CI run](https://github.com/irshatharis/agent-awake/actions/runs/38027406686)
 also passed these checks and packaged a universal build. Current coverage:
 
@@ -39,6 +39,11 @@ also passed these checks and packaged a universal build. Current coverage:
 - Existing external `nosleep`, an observed external `rsleep`, and renewed ownership.
 - Display sleep only during an active closed-lid lease, once per closure; re-closing,
   starting while closed, release/expiry, and bounded retry after an injected failure.
+- A permission notification while another call runs, anonymous permission and elicitation
+  placeholders cleared by later results, and stopped subagents removed from the store.
+- Agent detection for native, Homebrew, and npm (`bin/claude.exe`) Claude installs and for
+  Codex; an undecodable session store starting fresh; uninstall continuing past an
+  unreadable config.
 
 These are synthetic events and an injected power backend. They do not change global
 power settings or prove administrator-approved daemon behavior.
@@ -87,6 +92,8 @@ power settings or prove administrator-approved daemon behavior.
   The app was resumed, the manual test ended, and automatic mode restored afterward.
 - Actual helper SIGKILL recovery and real
   charger transitions remain pending. They are not advertised as verified.
+- Clamshell mode (lid closed with an external display) and helper recovery after an
+  in-place app update are implemented but not yet checked on hardware.
 
 ## Lifecycle coverage
 
@@ -147,6 +154,12 @@ does not establish complete hook coverage or solve the post-approval/interrupt g
    second write of `1` to an already-true global switch cannot be detected.
 10. Remove integrations, restart both CLIs, and verify unrelated hooks still work and no
     Agent Awake helper or idle assertion remains. Leave the global setting as it was before testing.
+11. Clamshell mode: on charger with an external display, keyboard, and the lid closed, start a
+    session. Diagnostics must read "Closed · clamshell mode". The external display must stay on,
+    and the Mac must stay awake after the session ends.
+12. In-place update: with the helper enabled, replace the app in /Applications with a new build
+    and relaunch it. Within a few seconds the helper should log "Helper executable replaced;
+    restarting", and a new session should report closed-lid protection active.
 
 ## Primary references
 

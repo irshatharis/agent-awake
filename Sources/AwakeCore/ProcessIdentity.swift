@@ -19,10 +19,7 @@ public struct ProcessIdentity: Codable, Equatable, Hashable, Sendable {
             let path = withUnsafePointer(to: &info.name) {
                 $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
             }
-            let name = URL(fileURLWithPath: path).lastPathComponent
-            let matches = provider == .codex ? name == "codex" :
-                (name == "claude" || path.contains("/claude/versions/"))
-            if matches { return ProcessIdentity(pid: pid, started: info.started) }
+            if Provider(executablePath: path) == provider { return ProcessIdentity(pid: pid, started: info.started) }
             pid = info.ppid
         }
         return nil
@@ -36,12 +33,17 @@ public struct ProcessIdentity: Codable, Equatable, Hashable, Sendable {
             let path = withUnsafePointer(to: &info.name) {
                 $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
             }
-            let name = URL(fileURLWithPath: path).lastPathComponent
-            let provider: Provider
-            if name == "codex" { provider = .codex }
-            else if name == "claude" || path.contains("/claude/versions/") { provider = .claude }
-            else { return nil }
+            guard let provider = Provider(executablePath: path) else { return nil }
             return (provider, ProcessIdentity(pid: pid, started: info.started))
         }
+    }
+}
+
+extension Provider {
+    public init?(executablePath path: String) {
+        let name = URL(fileURLWithPath: path).lastPathComponent
+        if name == "codex" { self = .codex }
+        else if name == "claude" || name == "claude.exe" || path.contains("/claude/versions/") { self = .claude }
+        else { return nil }
     }
 }

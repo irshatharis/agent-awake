@@ -10,7 +10,7 @@ final class SystemPowerBackend: PowerBackend {
     private var journal: URL { directory.appendingPathComponent("restore-sleep") }
     var disabled: Bool? { PowerSystem.sleepDisabled }
     var hasJournal: Bool { FileManager.default.fileExists(atPath: journal.path) }
-    var lidClosed: Bool { PowerSystem.lidClosed }
+    var closedLidWouldSleep: Bool { PowerSystem.closedLidWouldSleep }
     init() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         var st = stat()
@@ -22,8 +22,8 @@ final class SystemPowerBackend: PowerBackend {
         guard PowerSystem.sleepDisabled == value else { throw AwakeError.helper("macOS rejected the power setting.") }
     }
     func sleepDisplays() throws {
-        // Recheck immediately before launching: the user may have reopened the lid.
-        guard PowerSystem.lidClosed else { return }
+        // Recheck immediately before launching: the user may have reopened the lid or connected a display.
+        guard PowerSystem.closedLidWouldSleep else { return }
         try runPMSet(["displaysleepnow"])
         Logger(subsystem: HelperConstants.service, category: "display").notice("Requested display sleep for closed lid")
     }
@@ -133,9 +133,26 @@ let listener = NSXPCListener(machServiceName: HelperConstants.service)
 listener.setConnectionCodeSigningRequirement(requirement)
 let delegate = ListenerDelegate(controller, queue: queue)
 listener.delegate = delegate
+var launchedExecutable = stat()
+let watchesExecutable = stat(executable.path, &launchedExecutable) == 0
+func executableReplaced() -> Bool {
+    var current = stat()
+    guard watchesExecutable else { return false }
+    return stat(executable.path, &current) != 0 || current.st_ino != launchedExecutable.st_ino
+        || current.st_dev != launchedExecutable.st_dev || current.st_mtimespec.tv_sec != launchedExecutable.st_mtimespec.tv_sec
+        || current.st_mtimespec.tv_nsec != launchedExecutable.st_mtimespec.tv_nsec
+}
 let timer = DispatchSource.makeTimerSource(queue: queue)
 timer.schedule(deadline: .now(), repeating: 1)
-timer.setEventHandler { controller.tick() }
+timer.setEventHandler {
+    controller.tick()
+    // An updated app has a new signature this process would reject. Exit once sleep is
+    // restored so launchd starts the new helper with the new requirement.
+    if executableReplaced(), (try? controller.release()) == true {
+        log.notice("Helper executable replaced; restarting")
+        exit(0)
+    }
+}
 timer.resume()
 for sig in [SIGTERM, SIGINT] { signal(sig, SIG_IGN) }
 let termination = DispatchSource.makeSignalSource(signal: SIGTERM, queue: queue)

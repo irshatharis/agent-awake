@@ -56,6 +56,9 @@ before the journal is removed. launchd runs the helper at boot and restarts it o
 startup restores an outstanding journal before accepting leases. An expired lease or
 disconnected client also restores. When the helper releases its owned override with the
 lid closed, it asks IOKit for system sleep; with the lid open it leaves idle sleep alone.
+A closed lid counts only when IOKit's `AppleClamshellCausesSleep` says macOS would sleep for
+it. In clamshell mode, with an external display in use, the helper neither blanks displays
+nor requests sleep. `disablesleep` does not change that flag.
 While a live lease prevents sleep, the helper polls lid state once per second. On a lid
 closure (or when protection starts with the lid closed), it runs the fixed operation
 `/usr/bin/pmset displaysleepnow`. This requests sleep for connected displays, including

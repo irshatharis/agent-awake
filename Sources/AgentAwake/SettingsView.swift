@@ -130,18 +130,18 @@ struct SettingsView: View {
                 diagnostic("Sleep", model.title)
                 diagnostic("Reason", model.decision.reason)
                 diagnostic("Power", "\(model.onBattery ? "Battery" : "Charger")\(model.batteryPercent.map { " · \($0)%" } ?? "")")
-                diagnostic("Lid", model.lidClosed ? "Closed" : "Open")
+                diagnostic("Lid", model.clamshellMode ? "Closed · clamshell mode, displays stay on" : model.lidClosed ? "Closed" : "Open")
                 diagnostic("Helper", model.helperMessage)
                 diagnostic("Hooks", "\(model.sessions.count) sessions · \(model.untracked.count) untracked processes")
                 if model.externalOverride {
-                    Text("Another tool has disabled system sleep. Agent Awake will preserve that setting; run your rsleep alias to clear it.").font(.caption).foregroundStyle(.orange)
+                    Text("Another tool has disabled system sleep. Agent Awake will preserve that setting. To clear it, run sudo pmset -a disablesleep 0.").font(.caption).foregroundStyle(.orange)
                 }
             }
             card {
                 Text("Privacy & compatibility").font(.headline)
                 Text("Stored locally: provider, opaque session and task IDs, process identity, lifecycle state, and timestamps. Prompt text, tool input/output, transcript paths, and working directories are discarded.")
                 Text("Hooks cannot observe every transition. Claude interruptions, post-approval execution, detached commands, and hooks that extend a Stop can leave uncertain state. The source includes the exact support matrix and test results.")
-                Text("nosleep / rsleep share one global switch. An existing nosleep is preserved; an observed rsleep is respected. Repeating nosleep while Agent Awake already owns that switch is indistinguishable from no change.")
+                Text("Other keep-awake tools share the same global sleep switch (pmset disablesleep). A setting they made first is preserved, and Agent Awake stops if one of them turns sleep back on. If another tool sets it again while Agent Awake owns it, the change cannot be detected.")
                 Link("Read detection limits & test checklist", destination: URL(string: "https://github.com/irshatharis/agent-awake/blob/main/docs/VERIFICATION.md")!)
             }.font(.caption).foregroundStyle(.secondary)
             card {

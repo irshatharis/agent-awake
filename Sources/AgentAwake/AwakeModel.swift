@@ -23,6 +23,7 @@ import Darwin
     @Published var batteryPercent: Int?
     @Published var onBattery = false
     @Published var lidClosed = false
+    @Published var clamshellMode = false
     @Published var installedProviders: Set<Provider> = []
     @Published var notice: String?
     @Published var manualLabel: String?
@@ -53,7 +54,9 @@ import Darwin
         // Manual leases are deliberately not resurrected after a crash or reboot.
         helper.onState = { [weak self] ok, external, message, lost, acknowledgedAwake in
             guard let self else { return }
-            self.helperReady = ok && acknowledgedAwake && self.decision.preventSleep; self.externalOverride = external; self.helperMessage = message
+            self.helperReady = ok && acknowledgedAwake && self.decision.preventSleep; self.helperMessage = message
+            // Only a responding helper knows who owns the switch; otherwise keep the periodic scan's reading.
+            if ok { self.externalOverride = external }
             if lost && self.decision.preventSleep {
                 self.powerFault = true
                 self.allowSleep()
@@ -102,6 +105,7 @@ import Darwin
         }
         let battery = PowerSystem.battery
         batteryPercent = battery.percent; onBattery = battery.onBattery; lidClosed = PowerSystem.lidClosed
+        clamshellMode = lidClosed && !PowerSystem.closedLidWouldSleep
         let next = policy.evaluate(sessions: sessions, now: clockNow, uptime: uptime, battery: battery.percent, onBattery: battery.onBattery)
         let changed = next.preventSleep != decision.preventSleep
         if next.preventSleep && !decision.preventSleep { generation = UUID().uuidString }
@@ -110,7 +114,9 @@ import Darwin
         if policy.indefinite { manualLabel = "Until you end it" }
         else if let until = policy.manualUntil {
             let seconds = max(0, Int(until.timeIntervalSince(clockNow)))
-            manualLabel = String(format: "%d:%02d remaining", seconds / 60, seconds % 60)
+            manualLabel = seconds >= 3600
+                ? String(format: "%d:%02d:%02d remaining", seconds / 3600, seconds / 60 % 60, seconds % 60)
+                : String(format: "%d:%02d remaining", seconds / 60, seconds % 60)
         } else { manualLabel = nil }
         if changed || uptime - lastHelperRenewal >= 3 {
             helper.renew(awake: next.preventSleep && !powerFault, generation: generation)
@@ -164,14 +170,15 @@ import Darwin
             guard let self else { return }
             guard ok || PowerSystem.sleepDisabled == false else { self.busy = false; self.notice = "Sleep restoration must succeed before removal: \(text)"; return }
             Task { @MainActor in
+                // The root helper goes first: an unreadable hook config must not leave it registered.
                 do {
-                    try HookInstaller().uninstall()
                     if self.helper.status != .notRegistered { try await self.helper.unregister() }
                     if SMAppService.mainApp.status == .enabled { try await SMAppService.mainApp.unregister() }
                     self.loginEnabled = false; self.helperReady = false
-                    self.refreshInstallation(); self.helperStatus = self.helper.status
+                    try HookInstaller().uninstall()
                     self.notice = "Integrations removed. Existing hooks are preserved. You can now quit and delete Agent Awake."
                 } catch { self.notice = "Removal incomplete: \(error.localizedDescription)" }
+                self.refreshInstallation(); self.helperStatus = self.helper.status
                 self.busy = false
             }
         }

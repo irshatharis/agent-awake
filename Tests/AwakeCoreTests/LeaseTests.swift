@@ -4,7 +4,7 @@ import AwakeCore
 final class FakePower: PowerBackend {
     var disabled: Bool? = false
     var hasJournal = false
-    var lidClosed = false
+    var closedLidWouldSleep = false
     var operations: [String] = []
     var failWrite = false
     var failDisplay = false
@@ -27,12 +27,12 @@ final class LeaseTests {
         let lease = PowerLeaseController(backend: backend, now: { clock })
         _ = lease.renew(awake: true, generation: "a")
         expectFalse(backend.operations.contains("displaySleep"))
-        backend.lidClosed = true; lease.tick()
+        backend.closedLidWouldSleep = true; lease.tick()
         expectEqual(backend.operations.filter { $0 == "displaySleep" }.count, 1)
         clock = 1; lease.tick(); _ = lease.renew(awake: true, generation: "a")
         expectEqual(backend.operations.filter { $0 == "displaySleep" }.count, 1)
-        backend.lidClosed = false; lease.tick()
-        backend.lidClosed = true; lease.tick()
+        backend.closedLidWouldSleep = false; lease.tick()
+        backend.closedLidWouldSleep = true; lease.tick()
         expectEqual(backend.operations.filter { $0 == "displaySleep" }.count, 2)
         try lease.release(); backend.operations = []; lease.tick()
         expectTrue(backend.operations.isEmpty)
@@ -44,7 +44,7 @@ final class LeaseTests {
     }
     func testDisplaySleepFailureRetriesWithoutDroppingProtection() {
         let backend = FakePower(); var clock = 0.0
-        backend.lidClosed = true; backend.failDisplay = true
+        backend.closedLidWouldSleep = true; backend.failDisplay = true
         let lease = PowerLeaseController(backend: backend, now: { clock })
         let result = lease.renew(awake: true, generation: "a")
         expectTrue(result.0); expectTrue(result.2.contains("Display sleep request failed"))
