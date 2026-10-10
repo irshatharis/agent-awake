@@ -90,7 +90,7 @@ struct SettingsView: View {
                 Text("Check that the display turns off while the terminal stays reachable. After the timer ends, closing the lid should put the Mac to sleep.").font(.caption).foregroundStyle(.secondary)
             }
             Label {
-                Text("Detection limits: Claude has no interruption hook. Both CLIs can leave a gap after you approve a tool. Use an indefinite session when continuous remote access matters.")
+                Text("Detection limits: Claude Code status comes from its own session files, an undocumented format a Claude update could change. Unrecognized states show as unknown, never working. Codex hooks can leave a gap after you approve a tool. Use an indefinite session when continuous remote access matters.")
             } icon: { Image(systemName: "info.circle") }
                 .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }
@@ -136,15 +136,16 @@ struct SettingsView: View {
                 diagnostic("Power", "\(model.onBattery ? "Battery" : "Charger")\(model.batteryPercent.map { " · \($0)%" } ?? "")")
                 diagnostic("Lid", model.clamshellMode ? "Closed · clamshell mode, displays stay on" : model.lidClosed ? "Closed" : "Open")
                 diagnostic("Helper", model.helperMessage)
-                diagnostic("Hooks", "\(model.sessions.count) sessions · \(model.untracked.count) untracked processes")
+                diagnostic("Agents", "\(model.sessions.count) sessions · \(model.untracked.count) untracked processes")
                 if model.externalOverride {
                     Text("Another tool has disabled system sleep. Agent Awake will preserve that setting. To clear it, run sudo pmset -a disablesleep 0.").font(.caption).foregroundStyle(.orange)
                 }
             }
             card {
                 Text("Privacy & compatibility").font(.headline)
-                Text("Stored locally: provider, opaque session and task IDs, process identity, lifecycle state, and timestamps. Prompt text, tool input/output, transcript paths, and working directories are discarded.")
-                Text("Hooks cannot observe every transition. Claude interruptions, post-approval execution, detached commands, and hooks that extend a Stop can leave uncertain state. The source includes the exact support matrix and test results.")
+                Text("Stored locally for Codex: opaque session IDs, process identity, lifecycle state, and timestamps. Prompt text, tool input/output, transcript paths, and working directories are discarded.")
+                Text("Claude Code status is read from its session files and never stored. Only the process ID, start time, session ID, and status are decoded; working directories and session names are ignored.")
+                Text("Codex hooks cannot observe every transition. Post-approval execution, detached commands, and hooks that extend a Stop can leave uncertain state. Claude Code reports approvals, interruptions, and background shells itself. The source includes the exact support matrix and test results.")
                 Text("Other keep-awake tools share the same global sleep switch (pmset disablesleep). A setting they made first is preserved, and Agent Awake stops if one of them turns sleep back on. If another tool sets it again while Agent Awake owns it, the change cannot be detected.")
                 Link("Read detection limits & test checklist", destination: URL(string: "https://github.com/irshatharis/agent-awake/blob/main/docs/VERIFICATION.md")!)
             }.font(.caption).foregroundStyle(.secondary)

@@ -86,13 +86,12 @@ import Darwin
         guard !quitting else { return }
         clockNow = Date()
         let uptime = ProcessInfo.processInfo.systemUptime
-        do {
-            sessions = try local.snapshot().sessions.values.filter { $0.provider == .codex }.sorted { a, b in
-                if a.isWorking != b.isWorking { return a.isWorking }
-                return a.updatedAt > b.updatedAt
-            }
-        } catch {
-            sessions = []; notice = "Activity tracking unavailable: \(error.localizedDescription)"
+        var tracked = ClaudePresence.sessions()
+        do { tracked += try local.snapshot().sessions.values.filter { $0.provider == .codex } }
+        catch { notice = "Codex activity tracking unavailable: \(error.localizedDescription)" }
+        sessions = tracked.sorted { a, b in
+            if a.isWorking != b.isWorking { return a.isWorking }
+            return a.updatedAt > b.updatedAt
         }
         if uptime - lastScan > 5 {
             let known = Set(sessions.map(\.process))

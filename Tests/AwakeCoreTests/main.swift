@@ -25,7 +25,7 @@ func expectThrows<T>(_ value: @autoclosure () throws -> T, file: StaticString = 
     do { _ = try value(); fail("expected error", file: file, line: line) } catch {}
 }
 let activity = ActivityTests(), policy = PolicyTests(), config = ConfigurationTests()
-let leases = LeaseTests()
+let leases = LeaseTests(), presence = PresenceTests()
 let tests: [(String, () throws -> Void)] = [
     ("Display sleep follows lid and lease", leases.testDisplaySleepFollowsLidAndActiveLease),
     ("Display request failure retry", leases.testDisplaySleepFailureRetriesWithoutDroppingProtection),
@@ -46,6 +46,12 @@ let tests: [(String, () throws -> Void)] = [
     ("Agent install layouts", activity.testRecognizesEachInstallLayout),
     ("Anonymous wait clears when tools finish", activity.testAnonymousWaitClearsWhenToolsFinish),
     ("Stopped subagents removed", activity.testStoppedSubagentsAreRemoved),
+    ("Claude presence status mapping", presence.testStatusMapping),
+    ("Claude presence liveness and start time", presence.testOnlyLiveClaudeProcessWithMatchingStartCounts),
+    ("Claude presence single-digit day", presence.testSingleDigitDayDoubleSpace),
+    ("Claude presence unsafe files", presence.testUnsafeAndMalformedFilesSkipped),
+    ("Claude presence shared session ID", presence.testSharedSessionIDKeepsWorkingProcess),
+    ("Claude presence directory", presence.testDirectoryFollowsClaudeConfigDir),
     ("Grace and restart", policy.testGraceNeverExtendsAndNewWorkCancelsIt),
     ("Indefinite, cutoff, charger", policy.testIndefiniteCutoffAndCharger),
     ("Allow sleep and resume", policy.testAllowSleepClearsManualAndPausesUntilResume),

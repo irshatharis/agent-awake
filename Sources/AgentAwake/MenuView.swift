@@ -55,9 +55,12 @@ struct MenuView: View {
                         }
                     }.frame(maxHeight: 185)
                 }
-                if !model.untracked.isEmpty {
-                    Text("\(model.untracked.count) agent process\(model.untracked.count == 1 ? "" : "es") awaiting hooks · activity unknown")
-                        .font(.caption).foregroundStyle(.secondary)
+                ForEach(Provider.allCases, id: \.self) { provider in
+                    let count = model.untracked.filter { $0.0 == provider }.count
+                    if count > 0 {
+                        Text("\(count) \(provider.title) process\(count == 1 ? "" : "es") \(provider == .claude ? "not reporting status · restart on the latest Claude Code" : "awaiting hooks · activity unknown")")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
             }.padding(20)
             Divider()

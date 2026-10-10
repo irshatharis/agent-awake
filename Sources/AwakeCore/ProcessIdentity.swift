@@ -16,10 +16,7 @@ public struct ProcessIdentity: Codable, Equatable, Hashable, Sendable {
         for _ in 0..<32 {
             var info = AAProcess()
             guard pid > 1, aa_process(pid, &info) == 1 else { return nil }
-            let path = withUnsafePointer(to: &info.name) {
-                $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
-            }
-            if Provider(executablePath: path) == provider { return ProcessIdentity(pid: pid, started: info.started) }
+            if Provider(executablePath: executable(&info)) == provider { return ProcessIdentity(pid: pid, started: info.started) }
             pid = info.ppid
         }
         return nil
@@ -28,13 +25,19 @@ public struct ProcessIdentity: Codable, Equatable, Hashable, Sendable {
         var pids = [Int32](repeating: 0, count: 8192)
         let count = aa_list_processes(&pids, Int32(pids.count))
         return pids.prefix(max(0, min(Int(count), pids.count))).compactMap { pid in
-            var info = AAProcess()
-            guard aa_process(pid, &info) == 1, info.uid == getuid() else { return nil }
-            let path = withUnsafePointer(to: &info.name) {
-                $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
-            }
-            guard let provider = Provider(executablePath: path) else { return nil }
-            return (provider, ProcessIdentity(pid: pid, started: info.started))
+            guard let process = running(pid), let provider = Provider(executablePath: process.executable) else { return nil }
+            return (provider, process.identity)
+        }
+    }
+    /// A live process owned by the current user.
+    public static func running(_ pid: Int32) -> (executable: String, identity: ProcessIdentity)? {
+        var info = AAProcess()
+        guard aa_process(pid, &info) == 1, info.uid == getuid() else { return nil }
+        return (executable(&info), ProcessIdentity(pid: pid, started: info.started))
+    }
+    private static func executable(_ info: inout AAProcess) -> String {
+        withUnsafePointer(to: &info.name) {
+            $0.withMemoryRebound(to: CChar.self, capacity: 1024) { String(cString: $0) }
         }
     }
 }
