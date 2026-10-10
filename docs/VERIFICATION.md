@@ -17,7 +17,7 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 
 ## Automated checks
 
-Run `scripts/check.sh`: 39 scenarios and 185 assertions pass on the development Mac.
+Run `scripts/check.sh`: 41 scenarios and 197 assertions pass on the development Mac.
 The [v0.1.1 macOS CI run](https://github.com/irshatharis/agent-awake/actions/runs/38027406686)
 passed the 35 scenarios of that release and packaged a universal build. Current coverage:
 
@@ -51,6 +51,8 @@ guards have no automated check: the regular-file test, since `O_NONBLOCK` plus a
 read already skip a FIFO or directory, and the owner test, which needs a second user.
 - Grace expiry without sliding the deadline; a new task cancels grace.
 - Timer expiry, indefinite sessions, battery cutoff, simulated charger changes, pause/resume.
+- Critical thermal state releasing manual and automatic sessions and resuming once below
+  critical; nominal, fair, and serious states leaving protection unchanged.
 - Journal-before-mutation ordering, heartbeat expiry, helper restart after simulated SIGKILL,
   restoration retry on injected failure, crash between journaling and mutation.
 - Existing external `nosleep`, an observed external `rsleep`, and renewed ownership.

@@ -14,8 +14,12 @@ public struct AwakePolicy: Sendable {
     public mutating func allowSleep() {
         paused = true; manualUntil = nil; indefinite = false; releaseAt = nil; wasWorking = false
     }
-    public mutating func evaluate(sessions: [AgentSession], now: Date, uptime: TimeInterval, battery: Int?, onBattery: Bool) -> PowerDecision {
+    public mutating func evaluate(sessions: [AgentSession], now: Date, uptime: TimeInterval, battery: Int?, onBattery: Bool, thermal: ProcessInfo.ThermalState) -> PowerDecision {
         if let until = manualUntil, until <= now { manualUntil = nil }
+        if thermal == .critical {
+            releaseAt = nil; wasWorking = false
+            return PowerDecision(preventSleep: false, reason: "Mac is too hot", graceRemaining: nil)
+        }
         if cutoffEnabled && onBattery, let battery, battery <= cutoffPercent {
             releaseAt = nil; wasWorking = false
             return PowerDecision(preventSleep: false, reason: "Battery at or below \(cutoffPercent)%", graceRemaining: nil)

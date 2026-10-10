@@ -10,29 +10,47 @@ final class PolicyTests {
     }
     func testGraceNeverExtendsAndNewWorkCancelsIt() {
         var p = AwakePolicy()
-        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 0, battery: 10, onBattery: true).preventSleep)
-        expectEqual(p.evaluate(sessions: [], now: now, uptime: 2, battery: nil, onBattery: true).graceRemaining, 8)
-        expectEqual(p.evaluate(sessions: [], now: now, uptime: 5, battery: nil, onBattery: true).graceRemaining, 5)
-        expectFalse(p.evaluate(sessions: [], now: now, uptime: 10, battery: nil, onBattery: true).preventSleep)
-        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 11, battery: nil, onBattery: true).preventSleep)
+        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 0, battery: 10, onBattery: true, thermal: .nominal).preventSleep)
+        expectEqual(p.evaluate(sessions: [], now: now, uptime: 2, battery: nil, onBattery: true, thermal: .nominal).graceRemaining, 8)
+        expectEqual(p.evaluate(sessions: [], now: now, uptime: 5, battery: nil, onBattery: true, thermal: .nominal).graceRemaining, 5)
+        expectFalse(p.evaluate(sessions: [], now: now, uptime: 10, battery: nil, onBattery: true, thermal: .nominal).preventSleep)
+        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 11, battery: nil, onBattery: true, thermal: .nominal).preventSleep)
     }
     func testIndefiniteCutoffAndCharger() {
         var p = AwakePolicy(); p.indefinite = true
-        expectTrue(p.evaluate(sessions: [], now: now, uptime: 1, battery: 5, onBattery: true).preventSleep)
+        expectTrue(p.evaluate(sessions: [], now: now, uptime: 1, battery: 5, onBattery: true, thermal: .nominal).preventSleep)
         p.cutoffEnabled = true
-        expectFalse(p.evaluate(sessions: [], now: now, uptime: 2, battery: 20, onBattery: true).preventSleep)
-        expectTrue(p.evaluate(sessions: [], now: now, uptime: 3, battery: 20, onBattery: false).preventSleep)
+        expectFalse(p.evaluate(sessions: [], now: now, uptime: 2, battery: 20, onBattery: true, thermal: .nominal).preventSleep)
+        expectTrue(p.evaluate(sessions: [], now: now, uptime: 3, battery: 20, onBattery: false, thermal: .nominal).preventSleep)
     }
     func testAllowSleepClearsManualAndPausesUntilResume() {
         var p = AwakePolicy(); p.indefinite = true; p.allowSleep()
-        expectFalse(p.evaluate(sessions: [working()], now: now, uptime: 1, battery: nil, onBattery: false).preventSleep)
+        expectFalse(p.evaluate(sessions: [working()], now: now, uptime: 1, battery: nil, onBattery: false, thermal: .nominal).preventSleep)
         p.paused = false
-        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 2, battery: nil, onBattery: false).preventSleep)
+        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 2, battery: nil, onBattery: false, thermal: .nominal).preventSleep)
     }
     func testTimerExpiry() {
         var p = AwakePolicy(); p.manualUntil = now.addingTimeInterval(60)
-        expectTrue(p.evaluate(sessions: [], now: now, uptime: 0, battery: nil, onBattery: false).preventSleep)
-        expectFalse(p.evaluate(sessions: [], now: now.addingTimeInterval(60), uptime: 60, battery: nil, onBattery: false).preventSleep)
+        expectTrue(p.evaluate(sessions: [], now: now, uptime: 0, battery: nil, onBattery: false, thermal: .nominal).preventSleep)
+        expectFalse(p.evaluate(sessions: [], now: now.addingTimeInterval(60), uptime: 60, battery: nil, onBattery: false, thermal: .nominal).preventSleep)
+    }
+    func testCriticalThermalReleasesAndRecovers() {
+        var p = AwakePolicy(); p.indefinite = true
+        let hot = p.evaluate(sessions: [], now: now, uptime: 0, battery: nil, onBattery: false, thermal: .critical)
+        expectFalse(hot.preventSleep); expectEqual(hot.reason, "Mac is too hot")
+        expectTrue(p.evaluate(sessions: [], now: now, uptime: 1, battery: nil, onBattery: false, thermal: .serious).preventSleep)
+        p.indefinite = false
+        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 2, battery: nil, onBattery: false, thermal: .nominal).preventSleep)
+        expectFalse(p.evaluate(sessions: [working()], now: now, uptime: 3, battery: nil, onBattery: false, thermal: .critical).preventSleep)
+        expectTrue(p.evaluate(sessions: [working()], now: now, uptime: 4, battery: nil, onBattery: false, thermal: .fair).preventSleep)
+    }
+    func testThermalBelowCriticalKeepsProtection() {
+        for state in [ProcessInfo.ThermalState.nominal, .fair, .serious] {
+            var manual = AwakePolicy(); manual.manualUntil = now.addingTimeInterval(60)
+            expectTrue(manual.evaluate(sessions: [], now: now, uptime: 0, battery: nil, onBattery: false, thermal: state).preventSleep)
+            var automatic = AwakePolicy()
+            expectTrue(automatic.evaluate(sessions: [working()], now: now, uptime: 0, battery: nil, onBattery: false, thermal: state).preventSleep)
+        }
     }
     func testExternalNosleepIsBorrowed() {
         var ownership = PowerOwnership()

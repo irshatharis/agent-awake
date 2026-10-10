@@ -56,6 +56,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Indefinite, cutoff, charger", policy.testIndefiniteCutoffAndCharger),
     ("Allow sleep and resume", policy.testAllowSleepClearsManualAndPausesUntilResume),
     ("Timer expiry", policy.testTimerExpiry),
+    ("Critical thermal releases and recovers", policy.testCriticalThermalReleasesAndRecovers),
+    ("Thermal below critical keeps protection", policy.testThermalBelowCriticalKeepsProtection),
     ("Existing nosleep", policy.testExternalNosleepIsBorrowed),
     ("External rsleep", policy.testExternalRsleepIsNotFought),
     ("Owned power restoration", policy.testOwnedOverrideRestores),

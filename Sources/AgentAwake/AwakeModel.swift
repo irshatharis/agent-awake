@@ -105,7 +105,7 @@ import Darwin
         let battery = PowerSystem.battery
         batteryPercent = battery.percent; onBattery = battery.onBattery; lidClosed = PowerSystem.lidClosed
         clamshellMode = lidClosed && !PowerSystem.closedLidWouldSleep
-        let next = policy.evaluate(sessions: sessions, now: clockNow, uptime: uptime, battery: battery.percent, onBattery: battery.onBattery)
+        let next = policy.evaluate(sessions: sessions, now: clockNow, uptime: uptime, battery: battery.percent, onBattery: battery.onBattery, thermal: ProcessInfo.processInfo.thermalState)
         let changed = next.preventSleep != decision.preventSleep
         if next.preventSleep && !decision.preventSleep { generation = UUID().uuidString }
         decision = next

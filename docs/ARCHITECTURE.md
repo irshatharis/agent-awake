@@ -58,7 +58,9 @@ of a recorded entry stays recorded and retries at the next launch.
 
 Manual indefinite or timed sessions and working agents are combined with OR. Automatic
 mode can be disabled or paused. The optional battery cutoff (default off; default threshold
-20%) overrides both modes only while on battery. Completion gets an eight-second grace
+20%) overrides both modes only while on battery. A critical thermal state (macOS
+`ProcessInfo.thermalState`) always overrides both modes, with no setting, and protection
+resumes once the state drops below critical. Completion gets an eight-second grace
 period measured with a monotonic clock. Manual timer expiration uses an absolute deadline.
 “Allow sleep now” ends manual sessions, clears grace, and persists automatic pause until
 explicit resume. Manual sessions are not restored after application restart.
