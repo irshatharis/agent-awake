@@ -56,5 +56,19 @@ final class ConfigurationTests {
         try store.ingest(event)
         try expectEqual(store.snapshot().sessions.keys.sorted(), ["claude:s1:main"])
     }
+    func testUninstallRemovesWhatItCanAndKeepsFailures() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let claude = dir.appendingPathComponent("claude.json"), codex = dir.appendingPathComponent("codex.json")
+        let installer = HookInstaller(store: LocalStore(directory: dir.appendingPathComponent("metadata")))
+        let hook = URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook")
+        try installer.install(provider: .claude, executable: hook, config: claude)
+        try installer.install(provider: .codex, executable: hook, config: codex)
+        try Data("{ not json".utf8).write(to: claude)
+        expectThrows(try installer.uninstall())
+        try expectFalse(String(contentsOf: codex, encoding: .utf8).contains("agent-awake-hook"))
+        try expectEqual(installer.installed().map(\.provider), [.claude])
+    }
 }
 

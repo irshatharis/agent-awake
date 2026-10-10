@@ -60,7 +60,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Preserve dotfile symlink on install and removal", config.testDotfileSymlinkInstallAndRemoval),
     ("Reject malformed configuration", config.testMalformedConfigIsNotOverwritten),
     ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection),
-    ("Unreadable session store recovers", config.testUnreadableStoreDoesNotBlockTracking)
+    ("Unreadable session store recovers", config.testUnreadableStoreDoesNotBlockTracking),
+    ("Partial uninstall keeps failures", config.testUninstallRemovesWhatItCanAndKeepsFailures)
 ]
 for (name, test) in tests {
     let before = failures
