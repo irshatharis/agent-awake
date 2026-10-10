@@ -111,12 +111,6 @@ public struct SessionStore: Codable, Sendable {
         if e.name == "PermissionRequest", e.toolID == nil, s.pendingTools.count == 1 {
             tool = s.pendingTools.first!
         }
-        // A permission request may be our first event (e.g. setup mid-session).
-        // Its anonymous placeholder is resolved by the sole subsequent result.
-        if ["PostToolUse", "PostToolUseFailure", "PermissionDenied"].contains(e.name),
-           s.pendingTools == ["unspecified"] {
-            tool = "unspecified"
-        }
         switch e.name {
         case "SessionStart": s.activity = .idle
         case "UserPromptSubmit":
@@ -130,7 +124,10 @@ public struct SessionStore: Codable, Sendable {
             s.pendingTools.insert(tool); s.waitingTools.insert(tool)
             s.activity = s.pendingTools.subtracting(s.waitingTools).isEmpty ? .waiting : .tool
         case "PostToolUse", "PostToolUseFailure", "PermissionDenied":
+            // An anonymous permission or elicitation placeholder cannot be matched to a call.
+            // Any result means its call has resolved or is running, so it must not outlive it.
             s.pendingTools.remove(tool); s.waitingTools.remove(tool)
+            s.pendingTools.remove("unspecified"); s.waitingTools.remove("unspecified")
             if e.interrupted { s.activity = .interrupted; s.pendingTools = []; s.waitingTools = [] }
             else if !s.pendingTools.subtracting(s.waitingTools).isEmpty { s.activity = .tool }
             else { s.activity = s.waitingTools.isEmpty ? .thinking : .waiting }
@@ -167,7 +164,9 @@ public struct SessionStore: Codable, Sendable {
             // Codex's Interrupt covers the parent only. Independently running children retain their state.
         case "Notification":
             if e.notification == "idle_prompt" { s.activity = .idle; s.pendingTools = []; s.waitingTools = []; s.backgroundIDs = [] }
-            else if e.notification == "permission_prompt" || e.notification == "elicitation_dialog" { s.activity = .waiting }
+            else if e.notification == "permission_prompt" || e.notification == "elicitation_dialog" {
+                s.activity = s.pendingTools.subtracting(s.waitingTools).isEmpty ? .waiting : .tool
+            }
         case "TaskCompleted":
             if let task = e.taskID {
                 s.backgroundIDs.remove(task)
@@ -177,7 +176,7 @@ public struct SessionStore: Codable, Sendable {
             }
         default: break
         }
-        sessions[key] = s
+        if e.name == "SubagentStop", e.agentID != nil { sessions.removeValue(forKey: key) } else { sessions[key] = s }
         if sessions.count > 512 {
             for old in sessions.values.sorted(by: { $0.updatedAt < $1.updatedAt }).prefix(sessions.count - 512) { sessions.removeValue(forKey: old.id) }
         }

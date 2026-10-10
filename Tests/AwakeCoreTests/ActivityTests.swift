@@ -68,7 +68,7 @@ final class ActivityTests {
         store.apply(try event("SubagentStart", fields: ["agent_id": "child1"]))
         store.apply(try event("Stop", fields: ["background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
         store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "job1", "status": "running"]]]))
-        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectTrue(store.sessions["claude:s1:child1"] == nil)
         expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
         expectTrue(store.sessions.values.contains(where: \.isWorking))
         store.apply(try event("Stop", fields: ["background_tasks": []]))
@@ -77,7 +77,7 @@ final class ActivityTests {
         // A child snapshot can be the first evidence of parent background work.
         store = SessionStore()
         store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
-        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectTrue(store.sessions["claude:s1:child1"] == nil)
         expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
         store.apply(try event("TaskCompleted", fields: ["task_id": "job1"]))
         expectFalse(store.sessions.values.contains(where: \.isWorking))
