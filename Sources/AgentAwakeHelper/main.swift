@@ -10,7 +10,7 @@ final class SystemPowerBackend: PowerBackend {
     private var journal: URL { directory.appendingPathComponent("restore-sleep") }
     var disabled: Bool? { PowerSystem.sleepDisabled }
     var hasJournal: Bool { FileManager.default.fileExists(atPath: journal.path) }
-    var lidClosed: Bool { PowerSystem.lidClosed }
+    var closedLidWouldSleep: Bool { PowerSystem.closedLidWouldSleep }
     init() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         var st = stat()
@@ -22,8 +22,8 @@ final class SystemPowerBackend: PowerBackend {
         guard PowerSystem.sleepDisabled == value else { throw AwakeError.helper("macOS rejected the power setting.") }
     }
     func sleepDisplays() throws {
-        // Recheck immediately before launching: the user may have reopened the lid.
-        guard PowerSystem.lidClosed else { return }
+        // Recheck immediately before launching: the user may have reopened the lid or connected a display.
+        guard PowerSystem.closedLidWouldSleep else { return }
         try runPMSet(["displaysleepnow"])
         Logger(subsystem: HelperConstants.service, category: "display").notice("Requested display sleep for closed lid")
     }

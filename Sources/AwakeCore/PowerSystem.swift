@@ -5,11 +5,15 @@ import IOKit.ps
 import Security
 
 public enum PowerSystem {
-    public static var lidClosed: Bool {
+    public static var lidClosed: Bool { rootFlag("AppleClamshellState") }
+    /// The kernel's own clamshell decision. False in clamshell mode (external display), where the
+    /// closed Mac is still in use, and unaffected by `disablesleep`.
+    public static var closedLidWouldSleep: Bool { lidClosed && rootFlag("AppleClamshellCausesSleep") }
+    private static func rootFlag(_ key: String) -> Bool {
         let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
         guard root != 0 else { return false }
         defer { IOObjectRelease(root) }
-        return IORegistryEntryCreateCFProperty(root, "AppleClamshellState" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Bool ?? false
+        return IORegistryEntryCreateCFProperty(root, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? Bool ?? false
     }
     public static var sleepDisabled: Bool? {
         let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
@@ -30,7 +34,7 @@ public enum PowerSystem {
         return (nil, false)
     }
     public static func requestLidSleep() {
-        guard lidClosed else { return }
+        guard closedLidWouldSleep else { return }
         let connection = IOPMFindPowerManagement(mach_port_t(MACH_PORT_NULL))
         guard connection != 0 else { return }
         _ = IOPMSleepSystem(connection)

@@ -23,6 +23,7 @@ import Darwin
     @Published var batteryPercent: Int?
     @Published var onBattery = false
     @Published var lidClosed = false
+    @Published var clamshellMode = false
     @Published var installedProviders: Set<Provider> = []
     @Published var notice: String?
     @Published var manualLabel: String?
@@ -104,6 +105,7 @@ import Darwin
         }
         let battery = PowerSystem.battery
         batteryPercent = battery.percent; onBattery = battery.onBattery; lidClosed = PowerSystem.lidClosed
+        clamshellMode = lidClosed && !PowerSystem.closedLidWouldSleep
         let next = policy.evaluate(sessions: sessions, now: clockNow, uptime: uptime, battery: battery.percent, onBattery: battery.onBattery)
         let changed = next.preventSleep != decision.preventSleep
         if next.preventSleep && !decision.preventSleep { generation = UUID().uuidString }

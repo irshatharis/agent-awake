@@ -130,7 +130,7 @@ struct SettingsView: View {
                 diagnostic("Sleep", model.title)
                 diagnostic("Reason", model.decision.reason)
                 diagnostic("Power", "\(model.onBattery ? "Battery" : "Charger")\(model.batteryPercent.map { " · \($0)%" } ?? "")")
-                diagnostic("Lid", model.lidClosed ? "Closed" : "Open")
+                diagnostic("Lid", model.clamshellMode ? "Closed · clamshell mode, displays stay on" : model.lidClosed ? "Closed" : "Open")
                 diagnostic("Helper", model.helperMessage)
                 diagnostic("Hooks", "\(model.sessions.count) sessions · \(model.untracked.count) untracked processes")
                 if model.externalOverride {
