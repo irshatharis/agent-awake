@@ -37,7 +37,8 @@ public final class LocalStore {
         var st = stat()
         guard fstat(fd, &st) == 0, st.st_uid == getuid(), st.st_mode & 0o077 == 0,
               (st.st_mode & S_IFMT) == S_IFREG, st.st_size <= 2 * 1024 * 1024 else { throw AwakeError.unsafePath }
-        return try JSONDecoder().decode(SessionStore.self, from: handle.readToEnd() ?? Data())
+        // Later hook events rebuild session state, so a file from another version starts fresh.
+        return (try? JSONDecoder().decode(SessionStore.self, from: handle.readToEnd() ?? Data())) ?? SessionStore()
     }
     public func write(_ state: SessionStore) throws {
         let data = try JSONEncoder().encode(state)
