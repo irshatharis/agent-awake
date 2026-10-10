@@ -116,4 +116,16 @@ final class ActivityTests {
         store.prune { $0 == ProcessIdentity(pid: 42, started: 999) }
         expectTrue(store.sessions.isEmpty)
     }
+    func testRecognizesEachInstallLayout() {
+        let layouts: [(String, Provider?)] = [
+            ("/Users/u/.local/share/claude/versions/2.1.296", .claude),
+            ("/opt/homebrew/Caskroom/claude-code/2.1.296/claude", .claude),
+            ("/usr/local/lib/node_modules/@anthropic-ai/claude-code/bin/claude.exe", .claude),
+            ("/opt/homebrew/Caskroom/codex/0.162.0/bin/codex", .codex),
+            ("/usr/local/lib/node_modules/@openai/codex/vendor/aarch64-apple-darwin/codex/codex", .codex),
+            ("/usr/local/bin/node", nil),
+            ("/bin/zsh", nil)
+        ]
+        for (path, provider) in layouts { expectEqual(Provider(executablePath: path), provider, path) }
+    }
 }

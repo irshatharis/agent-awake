@@ -45,6 +45,7 @@ let tests: [(String, () throws -> Void)] = [
     ("Background completion", activity.testBackgroundWorkAndCompletion),
     ("Privacy allowlist", activity.testPrivacyAllowlist),
     ("Invalid event and PID reuse", activity.testUnknownEventsRejectedAndPIDReusePruned),
+    ("Agent install layouts", activity.testRecognizesEachInstallLayout),
     ("Grace and restart", policy.testGraceNeverExtendsAndNewWorkCancelsIt),
     ("Indefinite, cutoff, charger", policy.testIndefiniteCutoffAndCharger),
     ("Allow sleep and resume", policy.testAllowSleepClearsManualAndPausesUntilResume),
