@@ -110,7 +110,9 @@ import Darwin
         if policy.indefinite { manualLabel = "Until you end it" }
         else if let until = policy.manualUntil {
             let seconds = max(0, Int(until.timeIntervalSince(clockNow)))
-            manualLabel = String(format: "%d:%02d remaining", seconds / 60, seconds % 60)
+            manualLabel = seconds >= 3600
+                ? String(format: "%d:%02d:%02d remaining", seconds / 3600, seconds / 60 % 60, seconds % 60)
+                : String(format: "%d:%02d remaining", seconds / 60, seconds % 60)
         } else { manualLabel = nil }
         if changed || uptime - lastHelperRenewal >= 3 {
             helper.renew(awake: next.preventSleep && !powerFault, generation: generation)
