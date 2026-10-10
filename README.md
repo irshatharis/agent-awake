@@ -8,13 +8,13 @@
 
 A native macOS menu-bar app that keeps your Mac awake for coding agents and remote terminals.
 
-[Website & setup guide](https://agent-awake.finegoose32.chatgpt.site) · [Download for Mac](https://github.com/irshatharis/agent-awake/releases/download/v0.1.1/Agent-Awake-0.1.1-macos-universal.zip) · [Installation & setup](#install-on-your-mac) · [Release notes](https://github.com/irshatharis/agent-awake/releases/tag/v0.1.1) · [Report an issue](https://github.com/irshatharis/agent-awake/issues)
+[Website & setup guide](https://irshatharis.github.io/agent-awake/) · [Download for Mac](https://github.com/irshatharis/agent-awake/releases/download/v0.1.2/Agent-Awake-0.1.2-macos-universal.dmg) · [Installation & setup](#install-on-your-mac) · [Release notes](https://github.com/irshatharis/agent-awake/releases/tag/v0.1.2) · [Report an issue](https://github.com/irshatharis/agent-awake/issues)
 
 macOS 14+ · Apple Silicon & Intel · Free · MIT · Local only
 
 </div>
 
-> **Preview release · v0.1.1.** The download is ad-hoc signed, **not Apple-notarized**.
+> **Preview release · v0.1.2.** The download is ad-hoc signed, **not Apple-notarized**.
 > macOS may block the first launch; follow the opening instructions below. Automatic
 > detection has known gaps. For continuous remote access, use a timed or indefinite
 > session. Closed-lid protection requires the approved helper and a check on your Mac.
@@ -41,11 +41,11 @@ macOS 14+ · Apple Silicon & Intel · Free · MIT · Local only
 
 ### 1. Download and move to Applications
 
-1. [Download Agent Awake v0.1.1](https://github.com/irshatharis/agent-awake/releases/download/v0.1.1/Agent-Awake-0.1.1-macos-universal.zip).
-2. Double-click the ZIP in Finder to extract **Agent Awake.app**.
-3. Move the app into **Applications** before opening it or enabling its helper.
-4. Double-click **Agent Awake**. Look for the sun or moon icon in your menu bar;
-   **the app does not appear in the Dock**. Click the icon, then the gear for Settings.
+1. [Download Agent Awake v0.1.2](https://github.com/irshatharis/agent-awake/releases/download/v0.1.2/Agent-Awake-0.1.2-macos-universal.dmg).
+2. Open the DMG and drag **Agent Awake.app** onto **Applications**.
+3. Eject the disk image. Open **Agent Awake** from **Applications**, not from the DMG.
+4. Look for the sun or moon icon in your menu bar. **The app does not appear in the Dock**.
+   Click the icon, then the gear for Settings.
 
 The universal binary contains both Apple Silicon and Intel executables. Development
 and physical checks were performed on Apple Silicon; Intel hardware and older supported
@@ -56,7 +56,9 @@ macOS versions have not been physically tested. See [verification](docs/VERIFICA
 This preview does not have a Developer ID certificate or Apple notarization. Download
 only from this repository's GitHub release, and open it only if you trust the source.
 
-After attempting to open the app:
+If the alert says Apple could not verify that the app is free of malware, or that the
+developer cannot be verified, this is the expected warning for this unnotarized preview.
+Click **Done** or **Cancel**, leaving the app in Applications. Then:
 
 1. Open **System Settings → Privacy & Security**.
 2. Scroll to the blocked-app message and click **Open Anyway**, if offered.
@@ -68,7 +70,7 @@ computer**, or that it is **damaged**, do not bypass that alert; download a fres
 [report the exact message](https://github.com/irshatharis/agent-awake/issues).
 
 Optional integrity check: download **SHA256SUMS.txt** from the same release, put it beside
-the ZIP, and run `shasum -a 256 -c SHA256SUMS.txt` in that directory. A checksum checks the
+the DMG, and run `shasum -a 256 -c SHA256SUMS.txt` in that directory. A checksum checks the
 download against the published asset; it is not a substitute for Apple notarization.
 
 ### 3. Enable closed-lid protection
@@ -230,9 +232,11 @@ open '/Applications/Agent Awake.app'
 Run the packaged app to use its bundled helpers and ServiceManagement integration;
 `swift run AgentAwake` does not create an app bundle. Open `Package.swift` in Xcode if
 preferred. `UNIVERSAL=1 scripts/build-app.sh` builds both Mac architectures.
-`scripts/package-release.sh` runs checks, builds a universal app, and produces the ZIP
-and SHA-256 checksum in `dist/`. For a Developer ID build, set `SIGN_IDENTITY`; signing
-alone does not notarize the result. See the [release guide](docs/RELEASING.md).
+`PREVIEW=1 scripts/package-release.sh` runs checks, builds a universal app, and produces
+a DMG and SHA-256 checksum in `dist/`. For a notarized release, set `SIGN_IDENTITY`
+and `NOTARY_PROFILE`, then run `scripts/package-release.sh`. The script signs the app,
+submits it to Apple, and staples and verifies the app and DMG tickets before packaging
+finishes. See the [release guide](docs/RELEASING.md).
 
 The landing-page source is in [`website/`](website/). See [architecture](docs/ARCHITECTURE.md),
 [verification](docs/VERIFICATION.md), and [contributing](CONTRIBUTING.md) for development

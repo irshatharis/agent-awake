@@ -10,10 +10,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check core and package universal app
-        run: scripts/package-release.sh
+        run: PREVIEW=1 scripts/package-release.sh
       - uses: actions/upload-artifact@v4
         with:
           name: Agent-Awake-preview
           path: |
-            dist/Agent-Awake-*-macos-universal.zip
+            dist/Agent-Awake-*-macos-universal.dmg
             dist/SHA256SUMS.txt

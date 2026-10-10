@@ -1,16 +1,19 @@
 # Agent Awake website
 
-Public website: [https://agent-awake.finegoose32.chatgpt.site](https://agent-awake.finegoose32.chatgpt.site).
+Public website: [Agent Awake](https://irshatharis.github.io/agent-awake/).
 
-A buildless, single-page download and setup guide. `index.html`, `styles.css`, `app.js`,
-and `assets/` are the complete site. The interactive product illustration uses synthetic
-state and does not control a visitor's Mac.
+The site is plain HTML, CSS, and JavaScript. The app preview does not control a visitor's Mac.
 
-Preview with `python3 -m http.server 4173 --directory website --bind 127.0.0.1` from
-the repository root. Versioned GitHub release URLs are intentionally pinned because
-the current release is a prerelease. Update the download, notes, and checksum URLs
-together when releasing a new version. See `docs/RELEASING.md` for publication details.
+Preview from the repository root:
 
-The durable Sites project ID is in `.openai/hosting.json`. Copy that manifest to
-`.build/site/.openai/hosting.json` and the public assets to `.build/site/dist/` when
-preparing a deployment. Reuse this project; do not create a new Site for updates.
+```sh
+python3 -m http.server 4173 --directory website --bind 127.0.0.1
+```
+
+GitHub Pages serves `website/` through `.github/workflows/pages.yml`. Push changes to
+`main` to deploy, or run the workflow manually. In the repository's Pages settings,
+the publishing source must be **GitHub Actions**.
+
+Downloads are direct DMG links to GitHub releases. Keep the versioned download links
+in `index.html` and the root README in sync with each published release.
+Prereleases need explicit version links because GitHub excludes them from `/releases/latest`.
