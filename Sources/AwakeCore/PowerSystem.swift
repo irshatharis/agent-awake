@@ -33,6 +33,26 @@ public enum PowerSystem {
         }
         return (nil, false)
     }
+    /// Calls `handler` on `queue` for every IOPMrootDomain interest message, which includes lid
+    /// and clamshell-sleep changes. Registered for the life of the process.
+    public static func observeRootDomain(on queue: DispatchQueue, _ handler: @escaping () -> Void) -> Bool {
+        let root = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("IOPMrootDomain"))
+        guard root != 0 else { return false }
+        defer { IOObjectRelease(root) }
+        guard let port = IONotificationPortCreate(kIOMainPortDefault) else { return false }
+        IONotificationPortSetDispatchQueue(port, queue)
+        let context = Unmanaged.passRetained(InterestHandler(handler))
+        var notification: io_object_t = 0
+        let result = IOServiceAddInterestNotification(port, root, kIOGeneralInterest, { context, _, _, _ in
+            guard let context else { return }
+            Unmanaged<InterestHandler>.fromOpaque(context).takeUnretainedValue().handler()
+        }, context.toOpaque(), &notification)
+        guard result == KERN_SUCCESS else {
+            context.release(); IONotificationPortDestroy(port)
+            return false
+        }
+        return true
+    }
     public static func requestLidSleep() {
         guard closedLidWouldSleep else { return }
         let connection = IOPMFindPowerManagement(mach_port_t(MACH_PORT_NULL))
@@ -40,6 +60,11 @@ public enum PowerSystem {
         _ = IOPMSleepSystem(connection)
         IOServiceClose(connection)
     }
+}
+
+private final class InterestHandler {
+    let handler: () -> Void
+    init(_ handler: @escaping () -> Void) { self.handler = handler }
 }
 
 public final class IdleAssertion {

@@ -126,6 +126,10 @@ do { backend = try SystemPowerBackend() }
 catch { log.error("Unsafe recovery directory"); exit(1) }
 let controller = PowerLeaseController(backend: backend)
 let queue = DispatchQueue(label: "com.irshatharis.AgentAwake.power")
+queue.sync {
+    controller.lidNotifications = PowerSystem.observeRootDomain(on: queue) { controller.lidChanged() }
+    if !controller.lidNotifications { log.error("Lid notifications unavailable; polling lid state") }
+}
 let requirement: String
 do { requirement = try CodeIdentity.requirement(at: app) }
 catch { log.error("Bundle authentication failed: \(error.localizedDescription, privacy: .public)"); exit(1) }

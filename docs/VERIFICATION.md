@@ -17,7 +17,7 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 
 ## Automated checks
 
-Run `scripts/check.sh`: 41 scenarios and 197 assertions pass on the development Mac.
+Run `scripts/check.sh`: 45 scenarios and 216 assertions pass on the development Mac.
 The [v0.1.1 macOS CI run](https://github.com/irshatharis/agent-awake/actions/runs/38027406686)
 passed the 35 scenarios of that release and packaged a universal build. Current coverage:
 
@@ -56,8 +56,11 @@ read already skip a FIFO or directory, and the owner test, which needs a second 
 - Journal-before-mutation ordering, heartbeat expiry, helper restart after simulated SIGKILL,
   restoration retry on injected failure, crash between journaling and mutation.
 - Existing external `nosleep`, an observed external `rsleep`, and renewed ownership.
-- Display sleep only during an active closed-lid lease, once per closure; re-closing,
-  starting while closed, release/expiry, and bounded retry after an injected failure.
+- Display sleep driven by synthetic lid notifications: only during an active closed-lid
+  lease, once per closure, a two-second closure debounce (a closure reopened within it is
+  ignored), re-closing, starting while closed, an open lid never blanked, release/expiry,
+  and a five-second retry after an injected failure that stops once the lid opens.
+- The once-per-second lid poll used when notifications cannot be registered.
 - Anonymous permission placeholders cleared by later results, and stopped subagents
   removed from the store.
 - Agent detection for native, Homebrew, and npm (`bin/claude.exe`) Claude installs and for
@@ -139,6 +142,13 @@ power settings or prove administrator-approved daemon behavior.
   charger transitions remain pending. They are not advertised as verified.
 - Clamshell mode (lid closed with an external display) and helper recovery after an
   in-place app update are implemented but not yet checked on hardware.
+- The IOKit lid notification path is not yet hardware-verified. The earlier dark-panel
+  observation used the once-per-second poll it replaced. A read-only probe on the
+  development Mac, run as a normal user, registered the `IOPMrootDomain` general-interest
+  notification successfully; no lid was closed during it. Whether a closure, an opening,
+  and an external display change each deliver a notification to the root helper remains
+  unconfirmed. The poll fallback covers only a failed registration. If registration
+  succeeds but a lid change sends no message, that closure gets no display sleep request.
 
 ## Lifecycle coverage
 
@@ -194,7 +204,9 @@ The Claude hook reducer this section once tested was removed along with Claude h
 2. Start an indefinite session. `pmset -g` should show `SleepDisabled 1`; `pmset -g assertions`
    should list Agent Awake's idle assertion and no Agent Awake display assertion.
 3. Close the lid on battery. From another device, verify a terminal heartbeat continues
-   for several minutes and inspect whether the internal panel is off. Repeat on charger.
+   for several minutes and inspect whether the internal panel turns off within about three
+   seconds. Open and close the lid again; the panel should turn off again. Confirm the
+   helper log has no "Lid notifications unavailable" entry. Repeat on charger.
 4. Run agents in multiple terminals; complete one while another works. Verify continued
    prevention. Complete the last and check the grace countdown.
 5. With lid closed, expire a timer/finish all agents and verify the Mac sleeps. With lid

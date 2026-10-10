@@ -84,8 +84,14 @@ lid closed, it asks IOKit for system sleep; with the lid open it leaves idle sle
 A closed lid counts only when IOKit's `AppleClamshellCausesSleep` says macOS would sleep for
 it. In clamshell mode, with an external display in use, the helper neither blanks displays
 nor requests sleep. `disablesleep` does not change that flag.
-While a live lease prevents sleep, the helper polls lid state once per second. On a lid
-closure (or when protection starts with the lid closed), it runs the fixed operation
+While a live lease prevents sleep, the helper follows IOKit general-interest notifications
+on `IOPMrootDomain`. Each notification rereads `AppleClamshellState` and
+`AppleClamshellCausesSleep`. An opening ends the current closure at once; a closure must
+settle for two seconds before the helper acts, so it acts on the first one-second tick
+after that. Protection that starts with the lid already closed reads the lid immediately,
+without waiting for a notification. If the notification cannot be registered, the helper
+logs the failure and reads lid state once per second instead. On a settled lid closure
+(or when protection starts with the lid closed), it runs the fixed operation
 `/usr/bin/pmset displaysleepnow`. This requests sleep for connected displays, including
 external screens. It runs once per closure, retries a failed request after five seconds,
 and reports failures in Diagnostics. It never issues this command with an open lid or
