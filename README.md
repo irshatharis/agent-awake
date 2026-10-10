@@ -8,13 +8,13 @@
 
 A native macOS menu-bar app that keeps your Mac awake for coding agents and remote terminals.
 
-[Website & setup guide](https://irshatharis.github.io/agent-awake/) · [Download for Mac](https://github.com/irshatharis/agent-awake/releases/download/v0.1.2/Agent-Awake-0.1.2-macos-universal.dmg) · [Installation & setup](#install-on-your-mac) · [Release notes](https://github.com/irshatharis/agent-awake/releases/tag/v0.1.2) · [Report an issue](https://github.com/irshatharis/agent-awake/issues)
+[Website & setup guide](https://irshatharis.github.io/agent-awake/) · [Download for Mac](https://github.com/irshatharis/agent-awake/releases/download/v0.1.3/Agent-Awake-0.1.3-macos-universal.dmg) · [Installation & setup](#install-on-your-mac) · [Release notes](https://github.com/irshatharis/agent-awake/releases/tag/v0.1.3) · [Report an issue](https://github.com/irshatharis/agent-awake/issues)
 
 macOS 14+ · Apple Silicon & Intel · Free · MIT · Local only
 
 </div>
 
-> **Preview release · v0.1.2.** The download is ad-hoc signed, **not Apple-notarized**.
+> **Preview release · v0.1.3.** The download is ad-hoc signed, **not Apple-notarized**.
 > macOS may block the first launch; follow the opening instructions below. Automatic
 > detection has known gaps. For continuous remote access, use a timed or indefinite
 > session. Closed-lid protection requires the approved helper and a check on your Mac.
@@ -41,7 +41,7 @@ macOS 14+ · Apple Silicon & Intel · Free · MIT · Local only
 
 ### 1. Download and move to Applications
 
-1. [Download Agent Awake v0.1.2](https://github.com/irshatharis/agent-awake/releases/download/v0.1.2/Agent-Awake-0.1.2-macos-universal.dmg).
+1. [Download Agent Awake v0.1.3](https://github.com/irshatharis/agent-awake/releases/download/v0.1.3/Agent-Awake-0.1.3-macos-universal.dmg).
 2. Open the DMG and drag **Agent Awake.app** onto **Applications**.
 3. Eject the disk image. Open **Agent Awake** from **Applications**, not from the DMG.
 4. Look for the sun or moon icon in your menu bar. **The app does not appear in the Dock**.

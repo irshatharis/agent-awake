@@ -2,7 +2,7 @@
 
 ## DMG releases
 
-The current preview is v0.1.2. It is ad-hoc signed and not Apple-notarized.
+The current preview is v0.1.3. It is ad-hoc signed and not Apple-notarized.
 Keep that status visible in the README, site, and release notes until a notarized
 release is published. A DMG alone does not remove Gatekeeper warnings.
 
@@ -22,10 +22,10 @@ release is published. A DMG alone does not remove Gatekeeper warnings.
    assets with different bytes.
 
 ```sh
-gh release create v0.1.2 \
-  dist/Agent-Awake-0.1.2-macos-universal.dmg dist/SHA256SUMS.txt \
+gh release create v0.1.3 \
+  dist/Agent-Awake-0.1.3-macos-universal.dmg dist/SHA256SUMS.txt \
   --repo irshatharis/agent-awake --target <pushed-commit-sha> \
-  --prerelease --title 'Agent Awake 0.1.2: macOS preview' \
+  --prerelease --title 'Agent Awake 0.1.3: macOS preview' \
   --notes-file <release-notes-file>
 ```
 
