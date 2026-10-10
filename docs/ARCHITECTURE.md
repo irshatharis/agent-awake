@@ -3,12 +3,14 @@
 Three bundled executables, one dependency-free Swift core:
 
 - **AgentAwake**: SwiftUI menu-bar window and settings; evaluates policy every second;
-  owns a timeout-bounded idle-sleep assertion; registers the helper and login item through
-  `SMAppService`. It never requests a display-sleep assertion.
-- **agent-awake-hook**: synchronous, one-second CLI hook. Reads a bounded JSON payload,
-  walks process ancestry to identify the owning CLI, extracts an allowlist, and updates
-  private metadata under a short file lock. Always exits zero with empty stdout. No
-  permission decisions, network calls, transcript reads, or raw payload logs.
+  reads Claude Code session presence files; owns a timeout-bounded idle-sleep assertion;
+  registers the helper and login item through `SMAppService`. It never requests a
+  display-sleep assertion.
+- **agent-awake-hook**: synchronous, one-second Codex CLI hook. Reads a bounded JSON payload,
+  walks process ancestry to identify the owning Codex process, extracts an allowlist, and
+  updates private metadata under a short file lock. Always exits zero with empty stdout. No
+  permission decisions, network calls, transcript reads, or raw payload logs. A stale
+  Claude hook left by an older install also exits zero without reading its payload.
 - **agent-awake-helper**: launchd daemon. Accepts only signed copies of its containing
   app, with the designated requirement enforced by NSXPC for every message. The app
   likewise pins the bundled helper. Ad-hoc builds pin a cdhash; Developer ID builds pin
@@ -17,19 +19,40 @@ Three bundled executables, one dependency-free Swift core:
 ## State and privacy
 
 `~/Library/Application Support/Agent Awake/` is mode 0700. Its metadata and lock files
-are mode 0600. A single, bounded `sessions.json` contains provider, opaque IDs, process
-PID/start time, timestamps, lifecycle state, pending tool IDs, and background task IDs.
+are mode 0600. A single, bounded `sessions.json` holds Codex sessions only: provider, opaque
+IDs, process PID/start time, timestamps, lifecycle state, and pending tool IDs.
 No prompt, tool contents, cwd, or transcript paths are stored. There is no event history.
 Exited processes are pruned on ingestion and each app refresh; process birth time prevents
-PID reuse from reviving a session. Already-running unhooked processes appear as unknown
-and never become active merely because they exist.
+PID reuse from reviving a session.
 
-Configuration installation preserves all unrelated keys and handlers, uses atomic
-replacement, detects changes between reading and writing, and refuses malformed config
-or non-user-owned configuration targets. Dotfile symlinks are preserved; their verified
+Claude Code state is never stored. Each refresh reads `sessions/<pid>.json` from
+`CLAUDE_CONFIG_DIR`, or `~/.claude` when it is unset. A file counts only when its PID is a
+live process of the current user, the executable is Claude, and the kernel start time
+matches the file's `procStart` within two seconds. Claude leaves files behind for exited
+processes, so this check is what keeps a stale file or a reused PID from counting. Files
+are opened with `O_NOFOLLOW` and `O_NONBLOCK`, must be user-owned regular files of at most
+64 KB, and are skipped silently when malformed. Only `pid`, `sessionId`, `procStart`,
+`status`, and `statusUpdatedAt` are decoded; `cwd`, the session name, and every other key
+are ignored. One table maps `busy` to working, `shell` to background work, `waiting` to
+waiting, and `idle` to ready. Any other status shows as unknown and never keeps the Mac
+awake.
+
+Agent processes without a source of state appear as untracked and never become active
+merely because they exist: Claude processes without a presence file, and Codex processes
+without hook metadata.
+
+Only Codex receives hooks. Configuration installation preserves all unrelated keys and
+handlers, uses atomic replacement, detects changes between reading and writing, and
+refuses malformed config or non-user-owned configuration targets. Dotfile symlinks are preserved; their verified
 user-owned regular targets are edited. Exact installed commands are recorded for removal. Private
 backups stay beside the original config. Reinstalling is idempotent. Removal rereads the
-current config; it does not roll the whole file back to an old backup.
+current config; it does not roll the whole file back to an old backup. Removal deletes
+the exact recorded command from every hook event, so entries from retired event lists
+are removed too, and rewrites a file only when it held that command. On launch the app
+removes the Claude hooks earlier versions installed: the recorded Claude entries, plus
+this app's own Claude command in the current Claude settings, since a manifest can be
+lost. It shows a notice when a file changed. Rerunning changes nothing; a failed removal
+of a recorded entry stays recorded and retries at the next launch.
 
 ## Power policy
 
@@ -83,6 +106,10 @@ is no reliable, race-free ownership protocol with arbitrary external `pmset` cal
 
 ## Detection boundary
 
-See `VERIFICATION.md`. Hooks are useful but not a complete activity API. In particular,
-Claude lacks an interrupt hook, and the CLIs lack a post-permission/pre-execution event.
-Do not add CPU heuristics or silently interpret an open process as active to cover gaps.
+See `VERIFICATION.md`. Claude Code's presence file reports its own status, including
+approvals, interruptions, and background shells, which its hooks never reported. It is
+undocumented Claude internals and could change in any release. Unknown statuses show as
+unknown, never working, and a missing or unreadable file leaves the process untracked.
+Codex hooks are useful but not a complete activity API; in particular, Codex lacks a
+post-permission/pre-execution event. Do not add CPU heuristics or silently interpret an
+open process as active to cover gaps.

@@ -25,9 +25,10 @@ macOS 14+ · Apple Silicon & Intel · Free · MIT · Local only
   from one minute to seven days.
 - **Stay awake indefinitely:** keep a terminal available between tasks until you end
   the session. Agent Awake does not set up SSH, Tailscale, or other remote access.
-- **Follow agent activity:** optional hooks track Claude Code and Codex CLI sessions,
-  tools, permission waits, subagents, and reported background work. An open process
-  alone never counts as work; there are no CPU or screen-scraping heuristics.
+- **Follow agent activity:** Claude Code sessions are detected automatically from the
+  status files Claude writes, including permission waits, interruptions, and background
+  shells. Optional hooks track Codex CLI sessions, tools, permission waits, and subagents.
+  An open process alone never counts as work; there are no CPU or screen-scraping heuristics.
 - **Work with the lid closed:** the approved helper prevents lid sleep on battery and
   charger. It requests display sleep when the lid closes, including external displays.
 - **Return to ordinary sleep:** observed completion gets an eight-second grace period
@@ -118,36 +119,42 @@ overrides both manual and automatic protection while on battery.
 
 Manual sessions work without changing any agent configuration. For automatic detection:
 
-1. In **Settings → Setup**, click **Install hooks** for each CLI you use.
-2. **Claude Code:** restart existing sessions so the new hooks load.
-3. **Codex CLI:** open **`/hooks`**, review the Agent Awake commands, and trust them.
-   Restart existing sessions. Installation and hook trust are separate; Agent Awake
-   never bypasses Codex's trust check.
-4. Enable **Automatic agent mode**. Submit a prompt and check that a session appears
+1. **Claude Code:** nothing to install. Agent Awake reads the session status files
+   Claude Code keeps in `~/.claude/sessions/`. Sessions started before you updated
+   Claude Code may not write one; restart them.
+2. **Codex CLI:** in **Settings → Setup**, click **Install hooks**. Open **`/hooks`** in
+   Codex, review the Agent Awake commands, and trust them. Restart existing sessions.
+   Installation and hook trust are separate; Agent Awake never bypasses Codex's trust check.
+3. Enable **Automatic agent mode**. Submit a prompt and check that a session appears
    as working. When observed work finishes, the grace countdown should begin.
 
-The inspected versions are Claude Code **2.1.295** and Codex CLI **0.162.0**. This is CLI
-support, not a claim that every IDE, hosted session, or future version emits the same
-hooks. Hooks work independently of your choice of terminal, including Kitty; no alias
+The inspected versions are Claude Code **2.1.296** and Codex CLI **0.162.0**. This is CLI
+support, not a claim that every IDE, hosted session, or future version behaves the same.
+Detection works independently of your choice of terminal, including Kitty; no alias
 or agent launcher is required.
 
-Default configuration files are `~/.claude/settings.json` and `~/.codex/hooks.json`.
-Existing settings and unrelated hooks are preserved; private backups remain beside the
-configuration files. The installer honors `CLAUDE_CONFIG_DIR` and `CODEX_HOME` from the
-app's environment. Finder launches do not inherit shell startup variables. For a custom
-configuration location, launch `/Applications/Agent Awake.app/Contents/MacOS/AgentAwake`
+Earlier versions installed Claude Code hooks. On first launch this version removes the
+Claude hooks it installed, keeps every other setting and hook, and shows a notice.
+
+The Codex hook file is `~/.codex/hooks.json`. Existing settings and unrelated hooks are
+preserved; private backups remain beside the file. Agent Awake honors `CLAUDE_CONFIG_DIR`
+and `CODEX_HOME` from the app's environment. Finder launches do not inherit shell startup
+variables. For a custom location, launch `/Applications/Agent Awake.app/Contents/MacOS/AgentAwake`
 from a shell containing those variables, then install hooks from that app instance.
 
 ### Detection limits
 
-Hooks provide observed activity, not a complete activity API:
+Claude Code's status files report approvals, interruptions, and background shells
+within milliseconds. They are undocumented Claude internals and could change in any
+release. A status Agent Awake does not recognize shows as unknown and never keeps the
+Mac awake. Other detached work, such as an MCP job, is not reported.
 
-- Claude does not emit `Stop` on user interruption; activity can remain marked working
-  until a later idle notification or process exit.
-- Neither inspected CLI exposes an immediate permission-accepted/execution-started
-  event. A long approved tool can stay marked waiting until its result arrives.
-- Claude permission requests omit tool IDs. A single pending tool can be matched,
-  but parallel permission requests can be ambiguous.
+Codex hooks provide observed activity, not a complete activity API:
+
+- Codex exposes no immediate permission-accepted/execution-started event. A long
+  approved tool can stay marked waiting until its result arrives.
+- Permission requests without a tool ID can be matched to a single pending tool, but
+  parallel permission requests can be ambiguous.
 - Other Stop hooks can extend work, and detached jobs or canceled subagents may lack
   complete lifecycle coverage.
 - Existing sessions without loaded hooks remain unknown. Codex's shared daemon can
@@ -157,9 +164,9 @@ Automatic mode cannot guarantee “awake if and only if an agent is working.” 
 availability, choose a manual session. Read the [event coverage matrix](docs/VERIFICATION.md#lifecycle-coverage)
 for the exact boundary and test results.
 
-**OSC 7501 is deferred.** Claude Code emits the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status),
-but it provides no query for reading another terminal's records. Kitty 0.49.1's inspected
-APIs do not expose those reports. This release uses lifecycle hooks, not OSC 7501.
+**OSC 7501 is not used.** Claude Code emits the [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status),
+but only to the terminal, with no query for reading another terminal's records, and it
+reports `done` while a background shell still runs. The status files cover both gaps.
 
 ## Troubleshooting
 
@@ -168,7 +175,8 @@ APIs do not expose those reports. This release uses lifecycle hooks, not OSC 750
 | No window or Dock icon | Find the sun/moon menu-bar icon; this is a menu-bar app |
 | **Idle sleep prevented** / **Lid protection unavailable** | Enable and approve the helper, then start or resume a session |
 | Helper waiting for approval | Check **Login Items & Extensions → Allow in the Background** |
-| Agent process awaiting hooks / activity unknown | Install hooks, trust them in Codex, and restart the CLI session |
+| Claude Code process not reporting status | Restart the session on the latest Claude Code |
+| Codex process awaiting hooks / activity unknown | Install hooks, trust them in Codex, and restart the CLI session |
 | Mac still sleeps during automatic work | Review detection limits; use a manual session and run the hardware check |
 | Protection stops at low battery | Check the optional battery cutoff in Preferences |
 | **Sleep disabled externally** | Another tool owns the global setting; Agent Awake preserves it |
@@ -211,8 +219,10 @@ distinguished.
 ## Privacy
 
 The app makes no network requests and has no analytics, accounts, or transcript readers.
-Hooks discard prompts, tool input/output, working directories, and transcript paths.
-Only activity metadata is kept privately under `~/Library/Application Support/Agent Awake/`.
+Codex hooks discard prompts, tool input/output, working directories, and transcript paths.
+From Claude Code's status files, only the process ID, start time, session ID, and status are
+read, and nothing is stored. Only Codex activity metadata is kept privately under
+`~/Library/Application Support/Agent Awake/`.
 Configuration backups can contain your pre-existing settings. Agent Awake does not
 provide remote access; configure and secure your remote-access tool separately.
 
