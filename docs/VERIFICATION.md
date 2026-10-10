@@ -11,13 +11,13 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 - No Developer ID signing identity available. Local app is ad-hoc signed.
 - The helper is registered, running as root, and communicating through authenticated XPC.
   The user confirmed closed-lid wake prevention on battery and normal lid sleep after
-  timer expiration. The first build kept the panel lit; explicit display sleep was added
-  and is undergoing a separate check with an authenticated helper connection.
+  timer expiration. After the display fix, the panel turned off during a protected
+  ten-second closure while a local heartbeat continued once per second.
 
 ## Automated checks
 
 Run `scripts/check.sh`: 27 scenarios and 103 assertions pass on the development Mac.
-Both macOS CI runs before the display fix passed. Current coverage:
+The macOS CI build and checks also passed with the display fix. Current coverage:
 
 - Both CLI event sequences: session start, submit, tool, permission wait, result, stop, end.
 - Multiple independent sessions, parent completion while a subagent keeps working.
@@ -59,9 +59,17 @@ power settings or prove administrator-approved daemon behavior.
   Integrations were then reinstalled.
 - The user confirmed the first two-minute session prevented lid sleep on battery; after
   expiry, closing the lid put the Mac to sleep. The panel remained lit during protection,
-  prompting the explicit display request. A subsequent observation of a dark panel was
-  inconclusive because the updated helper was not yet connected; it is not counted as
-  successful display-with-awake verification.
+  prompting the explicit display request.
+- With the updated helper connected, the user confirmed the panel went dark during a
+  ten-second closure on battery. Ten protected closed-lid heartbeat samples were recorded,
+  with a maximum interval of 1.04 seconds. The helper logged its display-sleep request.
+  This verifies display shutdown with continuing local execution over that short interval;
+  extended remote connectivity and external-display configurations were not tested.
+- The updated two-minute timer released SleepDisabled exactly two minutes after acquisition
+  (within the one-second sampling interval), with the lid open.
+- Suspending the real app with SIGSTOP stopped its heartbeat: the helper restored
+  SleepDisabled=0 after 12.00 seconds, and the app's timeout-bounded idle assertion expired.
+  The app was resumed, the manual test ended, and automatic mode restored afterward.
 - Actual helper SIGKILL recovery and real
   charger transitions remain pending. They are not advertised as verified.
 
