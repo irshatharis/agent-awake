@@ -53,7 +53,9 @@ import Darwin
         // Manual leases are deliberately not resurrected after a crash or reboot.
         helper.onState = { [weak self] ok, external, message, lost, acknowledgedAwake in
             guard let self else { return }
-            self.helperReady = ok && acknowledgedAwake && self.decision.preventSleep; self.externalOverride = external; self.helperMessage = message
+            self.helperReady = ok && acknowledgedAwake && self.decision.preventSleep; self.helperMessage = message
+            // Only a responding helper knows who owns the switch; otherwise keep the periodic scan's reading.
+            if ok { self.externalOverride = external }
             if lost && self.decision.preventSleep {
                 self.powerFault = true
                 self.allowSleep()
