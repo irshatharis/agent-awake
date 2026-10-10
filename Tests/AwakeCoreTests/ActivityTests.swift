@@ -3,20 +3,19 @@ import AwakeCore
 
 final class ActivityTests {
     let process = ProcessIdentity(pid: 42, started: 100)
-    func event(_ name: String, provider: Provider = .claude, session: String = "s1", fields: [String: Any] = [:]) throws -> HookEvent {
+    func event(_ name: String, session: String = "s1", fields: [String: Any] = [:]) throws -> HookEvent {
         var json = fields; json["hook_event_name"] = name; json["session_id"] = session
-        return try HookEvent(data: JSONSerialization.data(withJSONObject: json), provider: provider, process: process)
+        return try HookEvent(data: JSONSerialization.data(withJSONObject: json), process: process)
     }
-    func testCompleteLifecycleForBothProviders() throws {
-        for provider in Provider.allCases {
-            var store = SessionStore()
-            for (name, state) in [("SessionStart", Activity.idle), ("UserPromptSubmit", .thinking), ("PreToolUse", .tool), ("PermissionRequest", .waiting), ("PostToolUse", .thinking), ("Stop", .idle)] {
-                store.apply(try event(name, provider: provider, fields: ["tool_use_id": "tool1"]))
-                expectEqual(store.sessions.values.first?.activity, state, name)
-            }
-            store.apply(try event("SessionEnd", provider: provider))
-            expectTrue(store.sessions.isEmpty)
+    func testCodexLifecycle() throws {
+        var store = SessionStore()
+        for (name, state) in [("SessionStart", Activity.idle), ("UserPromptSubmit", .thinking), ("PreToolUse", .tool), ("PermissionRequest", .waiting), ("PostToolUse", .thinking), ("Stop", .idle)] {
+            store.apply(try event(name, fields: ["tool_use_id": "tool1"]))
+            expectEqual(store.sessions.values.first?.activity, state, name)
         }
+        expectEqual(store.sessions.values.first?.provider, .codex)
+        store.apply(try event("SessionEnd"))
+        expectTrue(store.sessions.isEmpty)
     }
     func testSubagentOutlivesParentAndOtherSessionWaits() throws {
         var store = SessionStore()
@@ -38,7 +37,7 @@ final class ActivityTests {
         store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
         expectEqual(store.sessions.values.first?.activity, .waiting)
     }
-    func testClaudePermissionWithoutToolID() throws {
+    func testPermissionWithoutToolID() throws {
         var store = SessionStore()
         store.apply(try event("PreToolUse", fields: ["tool_use_id": "a", "tool_name": "Bash"]))
         store.apply(try event("PermissionRequest", fields: ["tool_name": "Bash"]))
@@ -63,46 +62,20 @@ final class ActivityTests {
         expectEqual(store.sessions.values.first?.activity, .tool)
         expectEqual(store.sessions.values.first?.pendingTools.subtracting(store.sessions.values.first!.waitingTools), ["a", "b"])
     }
-    func testSubagentStopDoesNotRetainParentBackgroundSnapshot() throws {
-        var store = SessionStore()
-        store.apply(try event("SubagentStart", fields: ["agent_id": "child1"]))
-        store.apply(try event("Stop", fields: ["background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
-        store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "job1", "status": "running"]]]))
-        expectTrue(store.sessions["claude:s1:child1"] == nil)
-        expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
-        expectTrue(store.sessions.values.contains(where: \.isWorking))
-        store.apply(try event("Stop", fields: ["background_tasks": []]))
-        expectFalse(store.sessions.values.contains(where: \.isWorking))
-
-        // A child snapshot can be the first evidence of parent background work.
-        store = SessionStore()
-        store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
-        expectTrue(store.sessions["claude:s1:child1"] == nil)
-        expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
-        store.apply(try event("TaskCompleted", fields: ["task_id": "job1"]))
-        expectFalse(store.sessions.values.contains(where: \.isWorking))
-    }
     func testQuestionWaitsAndResumes() throws {
         var store = SessionStore()
-        store.apply(try event("PreToolUse", fields: ["tool_name": "AskUserQuestion"]))
+        store.apply(try event("PreToolUse", fields: ["tool_name": "request_user_input"]))
         expectFalse(store.sessions.values.first!.isWorking)
-        store.apply(try event("PostToolUse", fields: ["tool_name": "AskUserQuestion"]))
+        store.apply(try event("PostToolUse", fields: ["tool_name": "request_user_input"]))
         expectTrue(store.sessions.values.first!.isWorking)
     }
     func testInterruptAndCrash() throws {
         var store = SessionStore()
-        store.apply(try event("UserPromptSubmit", provider: .codex))
-        store.apply(try event("Interrupt", provider: .codex))
+        store.apply(try event("UserPromptSubmit"))
+        store.apply(try event("Interrupt"))
         expectEqual(store.sessions.values.first?.activity, .interrupted)
         store.prune { _ in false }
         expectTrue(store.sessions.isEmpty)
-    }
-    func testBackgroundWorkAndCompletion() throws {
-        var store = SessionStore()
-        store.apply(try event("Stop", fields: ["background_tasks": [["id": "job1", "status": "running", "command": "SECRET"]]]))
-        expectTrue(store.sessions.values.first!.isWorking)
-        store.apply(try event("TaskCompleted", fields: ["task_id": "job1"]))
-        expectFalse(store.sessions.values.first!.isWorking)
     }
     func testPrivacyAllowlist() throws {
         var store = SessionStore()
@@ -111,7 +84,7 @@ final class ActivityTests {
         expectFalse(json.contains("SECRET")); expectFalse(json.contains("PRIVATE_PATH"))
     }
     func testUnknownEventsRejectedAndPIDReusePruned() throws {
-        expectThrows(try event("FakeEvent"))
+        for name in ["FakeEvent", "Notification", "TaskCompleted", "StopFailure"] { expectThrows(try event(name)) }
         var store = SessionStore(); store.apply(try event("UserPromptSubmit"))
         store.prune { $0 == ProcessIdentity(pid: 42, started: 999) }
         expectTrue(store.sessions.isEmpty)
@@ -128,14 +101,6 @@ final class ActivityTests {
         ]
         for (path, provider) in layouts { expectEqual(Provider(executablePath: path), provider, path) }
     }
-    func testPermissionNotificationDoesNotHideRunningTool() throws {
-        var store = SessionStore()
-        store.apply(try event("PreToolUse", fields: ["tool_use_id": "build", "tool_name": "Bash"]))
-        store.apply(try event("PreToolUse", fields: ["tool_use_id": "edit", "tool_name": "Edit"]))
-        store.apply(try event("PermissionRequest", fields: ["tool_use_id": "edit"]))
-        store.apply(try event("Notification", fields: ["notification_type": "permission_prompt"]))
-        expectEqual(store.sessions.values.first?.activity, .tool)
-    }
     func testAnonymousWaitClearsWhenToolsFinish() throws {
         var store = SessionStore()
         store.apply(try event("PreToolUse", fields: ["tool_use_id": "a"]))
@@ -143,14 +108,6 @@ final class ActivityTests {
         store.apply(try event("PermissionRequest"))
         store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
         store.apply(try event("PostToolUse", fields: ["tool_use_id": "b"]))
-        expectEqual(store.sessions.values.first?.activity, .thinking)
-        expectEqual(store.sessions.values.first?.pendingTools, [])
-
-        store = SessionStore()
-        store.apply(try event("PreToolUse", fields: ["tool_use_id": "mcp1"]))
-        store.apply(try event("Elicitation"))
-        store.apply(try event("ElicitationResult"))
-        store.apply(try event("PostToolUse", fields: ["tool_use_id": "mcp1"]))
         expectEqual(store.sessions.values.first?.activity, .thinking)
         expectEqual(store.sessions.values.first?.pendingTools, [])
     }
@@ -161,7 +118,7 @@ final class ActivityTests {
             store.apply(try event("SubagentStart", fields: ["agent_id": child]))
             store.apply(try event("SubagentStop", fields: ["agent_id": child]))
         }
-        expectEqual(store.sessions.keys.sorted(), ["claude:s1:main"])
+        expectEqual(store.sessions.keys.sorted(), ["codex:s1:main"])
     }
 }
 

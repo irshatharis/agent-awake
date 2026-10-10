@@ -2,17 +2,13 @@ import Foundation
 import Darwin
 
 public enum HookConfiguration {
-    public static func events(for provider: Provider) -> [String] {
-        let common = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
-                      "PostToolUse", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "Stop"]
-        return common + (provider == .codex ? ["Interrupt"] :
-            ["PostToolUseFailure", "StopFailure", "PermissionDenied", "Notification", "Elicitation", "ElicitationResult", "TeammateIdle", "TaskCompleted"])
-    }
+    public static let events = ["SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PermissionRequest",
+                                "PostToolUse", "SubagentStart", "SubagentStop", "PreCompact", "PostCompact", "Stop", "Interrupt"]
     public static func shellQuote(_ value: String) -> String { "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'" }
-    public static func command(executable: URL, provider: Provider) -> String {
-        shellQuote(executable.path) + " " + provider.rawValue + " --managed-by-agent-awake-v1"
+    public static func command(executable: URL) -> String {
+        shellQuote(executable.path) + " codex --managed-by-agent-awake-v1"
     }
-    public static func merge(_ data: Data?, provider: Provider, command: String, remove: Bool = false) throws -> Data {
+    public static func merge(_ data: Data?, command: String, remove: Bool = false) throws -> Data {
         var root: [String: Any] = [:]
         if let data {
             guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -24,7 +20,9 @@ public enum HookConfiguration {
             throw AwakeError.invalidConfiguration("Existing hooks have an unsupported format. No changes were made.")
         }
         var hooks = root["hooks"] as? [String: Any] ?? [:]
-        for event in events(for: provider) {
+        // Removal scans every event so commands installed under retired event lists, such as
+        // the former Claude Code hooks, are removed too.
+        for event in remove ? hooks.keys.sorted() : events {
             if let value = hooks[event], !(value is [[String: Any]]) {
                 throw AwakeError.invalidConfiguration("Existing \(event) hooks have an unsupported format. No changes were made.")
             }
@@ -37,11 +35,7 @@ public enum HookConfiguration {
                 let kept = handlers.filter { ($0["command"] as? String) != command || ($0["type"] as? String) != "command" }
                 if !kept.isEmpty { group["hooks"] = kept; updated.append(group) }
             }
-            if !remove {
-                var group: [String: Any] = ["hooks": [["type": "command", "command": command, "timeout": 1]]]
-                if event == "Notification" { group["matcher"] = "permission_prompt|idle_prompt|elicitation_dialog" }
-                updated.append(group)
-            }
+            if !remove { updated.append(["hooks": [["type": "command", "command": command, "timeout": 1]]]) }
             if updated.isEmpty { hooks.removeValue(forKey: event) } else { hooks[event] = updated }
         }
         if hooks.isEmpty { root.removeValue(forKey: "hooks") } else { root["hooks"] = hooks }
@@ -57,34 +51,30 @@ public struct InstalledHook: Codable {
 public final class HookInstaller {
     public let store: LocalStore
     public init(store: LocalStore = LocalStore()) { self.store = store }
-    public func configURL(for provider: Provider) -> URL {
-        let env = ProcessInfo.processInfo.environment
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        if provider == .codex {
-            return (env["CODEX_HOME"].map { URL(fileURLWithPath: $0) } ?? home.appendingPathComponent(".codex")).appendingPathComponent("hooks.json")
-        }
-        return (env["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) } ?? home.appendingPathComponent(".claude")).appendingPathComponent("settings.json")
+    public var configURL: URL {
+        let home = ProcessInfo.processInfo.environment["CODEX_HOME"].map { URL(fileURLWithPath: $0) }
+        return (home ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")).appendingPathComponent("hooks.json")
     }
     private var manifestURL: URL { store.directory.appendingPathComponent("installed-hooks.json") }
     public func installed() throws -> [InstalledHook] {
         guard FileManager.default.fileExists(atPath: manifestURL.path) else { return [] }
         return try JSONDecoder().decode([InstalledHook].self, from: Data(contentsOf: manifestURL))
     }
-    public func install(provider: Provider, executable: URL, config: URL? = nil) throws {
+    public func install(executable: URL, config: URL? = nil) throws {
         try store.locked {
             var entries = try installed()
-            let url = try resolvedConfiguration(config ?? configURL(for: provider))
-            let command = HookConfiguration.command(executable: executable, provider: provider)
+            let url = try resolvedConfiguration(config ?? configURL)
+            let command = HookConfiguration.command(executable: executable)
             // Preserve exact previous commands so relocating the application remains removable.
             let original = try existing(url)
             var data = original
-            for old in entries where old.provider == provider && old.path == url.path {
-                data = try HookConfiguration.merge(data, provider: provider, command: old.command, remove: true)
+            for old in entries where old.provider == .codex && old.path == url.path {
+                data = try HookConfiguration.merge(data, command: old.command, remove: true)
             }
-            let merged = try HookConfiguration.merge(data, provider: provider, command: command)
+            let merged = try HookConfiguration.merge(data, command: command)
             try replace(url, data: merged, expected: original)
-            entries.removeAll { $0.provider == provider && $0.path == url.path }
-            entries.append(InstalledHook(provider: provider, path: url.path, command: command))
+            entries.removeAll { $0.provider == .codex && $0.path == url.path }
+            entries.append(InstalledHook(provider: .codex, path: url.path, command: command))
             try JSONEncoder().encode(entries).write(to: manifestURL, options: .atomic)
             chmod(manifestURL.path, 0o600)
         }
@@ -97,7 +87,7 @@ public final class HookInstaller {
                 let url = URL(fileURLWithPath: entry.path)
                 do {
                     if let data = try existing(url) {
-                        try replace(url, data: HookConfiguration.merge(data, provider: entry.provider, command: entry.command, remove: true), expected: data)
+                        try replace(url, data: HookConfiguration.merge(data, command: entry.command, remove: true), expected: data)
                     }
                 } catch {
                     remaining.append(entry)

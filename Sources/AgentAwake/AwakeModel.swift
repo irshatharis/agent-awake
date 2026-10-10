@@ -24,7 +24,7 @@ import Darwin
     @Published var onBattery = false
     @Published var lidClosed = false
     @Published var clamshellMode = false
-    @Published var installedProviders: Set<Provider> = []
+    @Published var codexHooksInstalled = false
     @Published var notice: String?
     @Published var manualLabel: String?
     @Published var clockNow = Date()
@@ -81,14 +81,13 @@ import Darwin
     var accent: Color { idleProtected && decision.preventSleep ? .orange : .secondary }
     var automaticDescription: String { paused ? "Paused until you resume" : automatic ? "Following agent activity" : "Automatic mode is off" }
     var hasManual: Bool { policy.indefinite || policy.manualUntil != nil }
-    var configurationPaths: String { Provider.allCases.map { HookInstaller().configURL(for: $0).path }.joined(separator: "\n") }
 
     func tick() {
         guard !quitting else { return }
         clockNow = Date()
         let uptime = ProcessInfo.processInfo.systemUptime
         do {
-            sessions = try local.snapshot().sessions.values.sorted { a, b in
+            sessions = try local.snapshot().sessions.values.filter { $0.provider == .codex }.sorted { a, b in
                 if a.isWorking != b.isWorking { return a.isWorking }
                 return a.updatedAt > b.updatedAt
             }
@@ -137,15 +136,15 @@ import Darwin
         helper.release { [weak self] ok, text in if !ok { self?.notice = text } }
     }
     func resume() { powerFault = false; notice = nil; paused = false; automatic = true; generation = UUID().uuidString; tick() }
-    func installHooks(_ provider: Provider) {
+    func installCodexHooks() {
         do {
-            try HookInstaller().install(provider: provider, executable: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agent-awake-hook"))
+            try HookInstaller().install(executable: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agent-awake-hook"))
             refreshInstallation()
-            notice = provider == .codex ? "Codex hooks installed. Open /hooks in Codex and review/trust the Agent Awake commands. Restart existing CLI sessions." : "Claude hooks installed. Restart existing Claude sessions to load them."
+            notice = "Codex hooks installed. Open /hooks in Codex and review/trust the Agent Awake commands. Restart existing CLI sessions."
         } catch { notice = error.localizedDescription }
     }
     func refreshInstallation() {
-        installedProviders = Set((try? HookInstaller().installed())?.map(\.provider) ?? [])
+        codexHooksInstalled = (try? HookInstaller().installed())?.contains { $0.provider == .codex } ?? false
     }
     func enableHelper() {
         do { try helper.register(); helperStatus = helper.status; SMAppService.openSystemSettingsLoginItems() }

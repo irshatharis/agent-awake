@@ -3,11 +3,11 @@ import AwakeCore
 final class ConfigurationTests {
     func testInstallTwiceAndRemovePreservesForeignHandlersAndSettings() throws {
         let original = Data(#"{"theme":"dark","hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"notify me","timeout":4}]}],"UnknownFutureEvent":[{"hooks":[{"type":"command","command":"custom"}]}]}}"#.utf8)
-        let command = HookConfiguration.command(executable: URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook"), provider: .codex)
-        let first = try HookConfiguration.merge(original, provider: .codex, command: command)
-        let second = try HookConfiguration.merge(first, provider: .codex, command: command)
+        let command = HookConfiguration.command(executable: URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook"))
+        let first = try HookConfiguration.merge(original, command: command)
+        let second = try HookConfiguration.merge(first, command: command)
         expectEqual(first, second)
-        let removed = try HookConfiguration.merge(second, provider: .codex, command: command, remove: true)
+        let removed = try HookConfiguration.merge(second, command: command, remove: true)
         try expectEqual(try JSONSerialization.jsonObject(with: original) as? NSDictionary, try JSONSerialization.jsonObject(with: removed) as? NSDictionary)
     }
     func testDotfileSymlinkInstallAndRemoval() throws {
@@ -20,7 +20,7 @@ final class ConfigurationTests {
         try original.write(to: target)
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
         let installer = HookInstaller(store: LocalStore(directory: dir.appendingPathComponent("metadata")))
-        try installer.install(provider: .claude, executable: URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook"), config: link)
+        try installer.install(executable: URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook"), config: link)
         try expectEqual(FileManager.default.destinationOfSymbolicLink(atPath: link.path), target.path)
         try expectTrue(String(contentsOf: target, encoding: .utf8).contains("UserPromptSubmit"))
         try installer.uninstall()
@@ -28,8 +28,8 @@ final class ConfigurationTests {
         try expectEqual(FileManager.default.destinationOfSymbolicLink(atPath: link.path), target.path)
     }
     func testMalformedConfigIsNotOverwritten() {
-        expectThrows(try HookConfiguration.merge(Data("invalid".utf8), provider: .claude, command: "x"))
-        expectThrows(try HookConfiguration.merge(Data(#"{"hooks":{"Stop":"bad"}}"#.utf8), provider: .claude, command: "x"))
+        expectThrows(try HookConfiguration.merge(Data("invalid".utf8), command: "x"))
+        expectThrows(try HookConfiguration.merge(Data(#"{"hooks":{"Stop":"bad"}}"#.utf8), command: "x"))
     }
     func testPrivateAtomicStoreAndSymlinkRejection() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -49,26 +49,26 @@ final class ConfigurationTests {
         let store = LocalStore(directory: dir)
         try store.prepare()
         let file = dir.appendingPathComponent("sessions.json")
-        try Data(#"{"version":2,"sessions":{"claude:old:main":{"id":"claude:old:main"}}}"#.utf8).write(to: file)
+        try Data(#"{"version":2,"sessions":{"codex:old:main":{"id":"codex:old:main"}}}"#.utf8).write(to: file)
         chmod(file.path, 0o600)
         let me = ProcessIdentity.read(getpid())!
-        let event = try HookEvent(data: Data(#"{"hook_event_name":"UserPromptSubmit","session_id":"s1"}"#.utf8), provider: .claude, process: me)
+        let event = try HookEvent(data: Data(#"{"hook_event_name":"UserPromptSubmit","session_id":"s1"}"#.utf8), process: me)
         try store.ingest(event)
-        try expectEqual(store.snapshot().sessions.keys.sorted(), ["claude:s1:main"])
+        try expectEqual(store.snapshot().sessions.keys.sorted(), ["codex:s1:main"])
     }
     func testUninstallRemovesWhatItCanAndKeepsFailures() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: dir) }
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let claude = dir.appendingPathComponent("claude.json"), codex = dir.appendingPathComponent("codex.json")
+        let broken = dir.appendingPathComponent("broken.json"), codex = dir.appendingPathComponent("codex.json")
         let installer = HookInstaller(store: LocalStore(directory: dir.appendingPathComponent("metadata")))
         let hook = URL(fileURLWithPath: "/Applications/Agent Awake.app/Contents/Helpers/agent-awake-hook")
-        try installer.install(provider: .claude, executable: hook, config: claude)
-        try installer.install(provider: .codex, executable: hook, config: codex)
-        try Data("{ not json".utf8).write(to: claude)
+        try installer.install(executable: hook, config: broken)
+        try installer.install(executable: hook, config: codex)
+        try Data("{ not json".utf8).write(to: broken)
         expectThrows(try installer.uninstall())
         try expectFalse(String(contentsOf: codex, encoding: .utf8).contains("agent-awake-hook"))
-        try expectEqual(installer.installed().map(\.provider), [.claude])
+        try expectEqual(installer.installed().map(\.path), [broken.path])
     }
 }
 

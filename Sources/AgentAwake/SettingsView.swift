@@ -51,19 +51,23 @@ struct SettingsView: View {
     private var setup: some View {
         VStack(alignment: .leading, spacing: 16) {
             card {
-                stepHeader("1", "Connect your agents", detail: "Add small lifecycle hooks without replacing your existing hooks.")
-                ForEach(Provider.allCases, id: \.self) { provider in
-                    HStack {
-                        Image(systemName: "terminal").foregroundStyle(.secondary)
-                        Text(provider.title).font(.system(size: 13, weight: .medium))
-                        Spacer()
-                        if model.installedProviders.contains(provider) {
-                            Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
-                        }
-                        Button(model.installedProviders.contains(provider) ? "Repair hooks" : "Install hooks") { model.installHooks(provider) }
-                    }.padding(.top, 7)
-                }
-                Text("Restart existing CLI sessions. In Codex, open /hooks and review/trust the Agent Awake commands. Installed does not mean trusted.")
+                stepHeader("1", "Connect your agents", detail: "Claude Code is detected automatically. Codex needs small lifecycle hooks, added without replacing your existing hooks.")
+                HStack {
+                    Image(systemName: "terminal").foregroundStyle(.secondary)
+                    Text(Provider.claude.title).font(.system(size: 13, weight: .medium))
+                    Spacer()
+                    Label("Detected automatically", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                }.padding(.top, 7)
+                HStack {
+                    Image(systemName: "terminal").foregroundStyle(.secondary)
+                    Text(Provider.codex.title).font(.system(size: 13, weight: .medium))
+                    Spacer()
+                    if model.codexHooksInstalled {
+                        Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green).font(.caption)
+                    }
+                    Button(model.codexHooksInstalled ? "Repair hooks" : "Install hooks") { model.installCodexHooks() }
+                }.padding(.top, 7)
+                Text("Restart existing Codex sessions, then open /hooks and review/trust the Agent Awake commands. Installed does not mean trusted.")
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             card {

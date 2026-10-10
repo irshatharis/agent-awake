@@ -4,7 +4,7 @@ final class PolicyTests {
     let now = Date(timeIntervalSince1970: 1000)
     func working() -> AgentSession {
         var store = SessionStore()
-        let event = try! HookEvent(data: Data(#"{"session_id":"x","hook_event_name":"UserPromptSubmit"}"#.utf8), provider: .codex, process: .init(pid: 1, started: 1))
+        let event = try! HookEvent(data: Data(#"{"session_id":"x","hook_event_name":"UserPromptSubmit"}"#.utf8), process: .init(pid: 1, started: 1))
         store.apply(event)
         return store.sessions.values.first!
     }

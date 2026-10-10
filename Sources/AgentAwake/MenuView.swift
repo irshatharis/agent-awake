@@ -45,7 +45,7 @@ struct MenuView: View {
                 if model.sessions.isEmpty {
                     HStack(spacing: 9) {
                         Image(systemName: "terminal").foregroundStyle(.tertiary)
-                        Text(model.installedProviders.isEmpty ? "Connect your agents in Settings" : "Ready for the next agent session")
+                        Text("Ready for the next agent session")
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }.padding(.vertical, 7)
                 } else {
@@ -131,7 +131,7 @@ struct AgentRow: View {
                 Text(session.shortID + " · PID \(session.process.pid)").font(.system(size: 10, design: .monospaced)).foregroundStyle(.tertiary)
             }
             Spacer()
-            Text(session.backgroundIDs.isEmpty ? session.activity.title : "Background work")
+            Text(session.activity.title)
                 .font(.system(size: 11)).foregroundStyle(session.isWorking ? Color.orange : .secondary)
         }.padding(10).background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
         .help("Last lifecycle event: \(session.lastEvent) at \(session.updatedAt.formatted())")
