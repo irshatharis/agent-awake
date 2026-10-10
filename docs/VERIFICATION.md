@@ -17,8 +17,8 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 ## Automated checks
 
 Run `scripts/check.sh`: 29 scenarios and 118 assertions pass on the development Mac.
-The earlier macOS CI build and checks passed with the display fix; the new reducer
-regressions have been verified locally. Current coverage:
+The [v0.1.1 macOS CI run](https://github.com/irshatharis/agent-awake/actions/runs/38027406686)
+also passed these checks and packaged a universal build. Current coverage:
 
 - Both CLI event sequences: session start, submit, tool, permission wait, result, stop, end.
 - Multiple independent sessions, parent completion while a subagent keeps working.
