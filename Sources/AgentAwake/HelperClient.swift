@@ -57,7 +57,7 @@ import AwakeCore
         } catch { requestedAwake = awake; failed(error.localizedDescription) }
     }
     private func failed(_ text: String) {
-        let lost = requestedAwake
+        let lost = hadConnection && requestedAwake
         inFlight = false; requestID = UUID()
         let old = connection; connection = nil
         old?.invalidationHandler = nil; old?.interruptionHandler = nil; old?.invalidate()
