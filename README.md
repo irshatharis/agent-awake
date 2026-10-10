@@ -204,8 +204,9 @@ sudo pmset -a disablesleep 0
 ```
 
 This changes the same global switch used by other keep-awake tools. Agent Awake preserves
-an existing `nosleep` setting and respects an observed `rsleep`; repeated writes of `1`
-while the switch is already on cannot be distinguished. The app does not edit your aliases.
+a `disablesleep 1` set by another tool before a session, and stops instead of fighting a
+later `disablesleep 0`. Repeated writes of `1` while the switch is already on cannot be
+distinguished.
 
 ## Privacy
 
