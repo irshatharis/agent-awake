@@ -104,7 +104,19 @@ public struct SessionStore: Codable, Sendable {
         s.process = e.process
         s.lastEvent = e.name; s.updatedAt = e.date
         if let turn = e.turnID { s.turnID = turn }
-        let tool = e.toolID ?? "unspecified"
+        var tool = e.toolID ?? "unspecified"
+        // Claude PermissionRequest deliberately omits tool_use_id. Correlate only
+        // when one pending call makes the identity unambiguous. With parallel calls
+        // an unidentified permission must not hide independently running tools.
+        if e.name == "PermissionRequest", e.toolID == nil, s.pendingTools.count == 1 {
+            tool = s.pendingTools.first!
+        }
+        // A permission request may be our first event (e.g. setup mid-session).
+        // Its anonymous placeholder is resolved by the sole subsequent result.
+        if ["PostToolUse", "PostToolUseFailure", "PermissionDenied"].contains(e.name),
+           s.pendingTools == ["unspecified"] {
+            tool = "unspecified"
+        }
         switch e.name {
         case "SessionStart": s.activity = .idle
         case "UserPromptSubmit":
@@ -124,7 +136,26 @@ public struct SessionStore: Codable, Sendable {
             else { s.activity = s.waitingTools.isEmpty ? .thinking : .waiting }
         case "Stop", "SubagentStop", "StopFailure", "TeammateIdle":
             s.activity = .idle; s.pendingTools = []; s.waitingTools = []
-            if let ids = e.backgroundIDs { s.backgroundIDs = ids }
+            // Claude's SubagentStop background_tasks snapshot belongs to the parent
+            // session. Keeping it on the stopped child duplicates tasks and can keep
+            // protection alive after the parent's later snapshot is empty.
+            if e.provider == .claude, e.name == "SubagentStop", e.agentID != nil {
+                s.backgroundIDs = []
+                if let ids = e.backgroundIDs {
+                    let parentKey = prefix + ":main"
+                    var parent = sessions[parentKey] ?? AgentSession(id: parentKey, provider: e.provider,
+                        sessionID: e.sessionID, process: e.process, activity: .unknown,
+                        lastEvent: e.name, updatedAt: e.date)
+                    // This snapshot belongs to the currently owning CLI process.
+                    if parent.process != e.process {
+                        parent.pendingTools = []; parent.waitingTools = []; parent.activity = .unknown
+                    }
+                    parent.process = e.process
+                    parent.backgroundIDs = ids
+                    parent.lastEvent = e.name; parent.updatedAt = e.date
+                    if sessions[parentKey] != nil || !ids.isEmpty { sessions[parentKey] = parent }
+                }
+            } else if let ids = e.backgroundIDs { s.backgroundIDs = ids }
             if e.name == "SubagentStop", let agent = e.agentID {
                 // A parent's background snapshot may include this same child.
                 for id in sessions.keys where sessions[id]?.sessionID == e.sessionID && sessions[id]?.provider == e.provider {

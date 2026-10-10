@@ -38,6 +38,50 @@ final class ActivityTests {
         store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
         expectEqual(store.sessions.values.first?.activity, .waiting)
     }
+    func testClaudePermissionWithoutToolID() throws {
+        var store = SessionStore()
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "a", "tool_name": "Bash"]))
+        store.apply(try event("PermissionRequest", fields: ["tool_name": "Bash"]))
+        expectEqual(store.sessions.values.first?.activity, .waiting)
+        expectEqual(store.sessions.values.first?.pendingTools, ["a"])
+        store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
+        expectEqual(store.sessions.values.first?.activity, .thinking)
+        expectTrue(store.sessions.values.first!.waitingTools.isEmpty)
+
+        // Tracking may begin at a permission event, before observing PreToolUse.
+        store = SessionStore()
+        store.apply(try event("PermissionRequest"))
+        store.apply(try event("PostToolUse", fields: ["tool_use_id": "a"]))
+        expectEqual(store.sessions.values.first?.activity, .thinking)
+        expectTrue(store.sessions.values.first!.pendingTools.isEmpty)
+
+        // Missing IDs cannot identify a particular call in a parallel batch.
+        store = SessionStore()
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "a"]))
+        store.apply(try event("PreToolUse", fields: ["tool_use_id": "b"]))
+        store.apply(try event("PermissionRequest"))
+        expectEqual(store.sessions.values.first?.activity, .tool)
+        expectEqual(store.sessions.values.first?.pendingTools.subtracting(store.sessions.values.first!.waitingTools), ["a", "b"])
+    }
+    func testSubagentStopDoesNotRetainParentBackgroundSnapshot() throws {
+        var store = SessionStore()
+        store.apply(try event("SubagentStart", fields: ["agent_id": "child1"]))
+        store.apply(try event("Stop", fields: ["background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
+        store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "job1", "status": "running"]]]))
+        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
+        expectTrue(store.sessions.values.contains(where: \.isWorking))
+        store.apply(try event("Stop", fields: ["background_tasks": []]))
+        expectFalse(store.sessions.values.contains(where: \.isWorking))
+
+        // A child snapshot can be the first evidence of parent background work.
+        store = SessionStore()
+        store.apply(try event("SubagentStop", fields: ["agent_id": "child1", "background_tasks": [["id": "child1", "status": "running"], ["id": "job1", "status": "running"]]]))
+        expectFalse(store.sessions["claude:s1:child1"]!.isWorking)
+        expectEqual(store.sessions["claude:s1:main"]!.backgroundIDs, ["job1"])
+        store.apply(try event("TaskCompleted", fields: ["task_id": "job1"]))
+        expectFalse(store.sessions.values.contains(where: \.isWorking))
+    }
     func testQuestionWaitsAndResumes() throws {
         var store = SessionStore()
         store.apply(try event("PreToolUse", fields: ["tool_name": "AskUserQuestion"]))

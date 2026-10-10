@@ -38,6 +38,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Both CLI lifecycles", activity.testCompleteLifecycleForBothProviders),
     ("Independent sessions and subagents", activity.testSubagentOutlivesParentAndOtherSessionWaits),
     ("Parallel tool permissions", activity.testParallelPermissionDoesNotHideRunningTool),
+    ("Claude permission without tool ID", activity.testClaudePermissionWithoutToolID),
+    ("Subagent stop and parent background snapshot", activity.testSubagentStopDoesNotRetainParentBackgroundSnapshot),
     ("User question and resume", activity.testQuestionWaitsAndResumes),
     ("Interrupt and crash", activity.testInterruptAndCrash),
     ("Background completion", activity.testBackgroundWorkAndCompletion),

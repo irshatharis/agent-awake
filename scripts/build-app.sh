@@ -7,12 +7,29 @@ mkdir -p .build
 STAGING="$(mktemp -d "$PWD/.build/package.XXXXXX")"
 trap 'rm -rf "$STAGING"' EXIT
 APP="$STAGING/Agent Awake.app"
-swift build -c "$CONFIGURATION"
-BIN="$(swift build -c "$CONFIGURATION" --show-bin-path)"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Helpers" "$APP/Contents/Resources" "$APP/Contents/Library/LaunchDaemons"
-cp "$BIN/AgentAwake" "$APP/Contents/MacOS/AgentAwake"
-cp "$BIN/agent-awake-hook" "$APP/Contents/Helpers/agent-awake-hook"
-cp "$BIN/agent-awake-helper" "$APP/Contents/Helpers/agent-awake-helper"
+if [ "${UNIVERSAL:-0}" = "1" ]; then
+    # SwiftPM's multi-arch --arch mode requires full Xcode. Build each target
+    # independently and merge so Command Line Tools can also package releases.
+    for ARCH in arm64 x86_64; do
+        swift build -c "$CONFIGURATION" --triple "$ARCH-apple-macosx14.0"
+        BIN="$(swift build -c "$CONFIGURATION" --triple "$ARCH-apple-macosx14.0" --show-bin-path)"
+        mkdir -p "$STAGING/$ARCH"
+        for NAME in AgentAwake agent-awake-hook agent-awake-helper; do
+            cp "$BIN/$NAME" "$STAGING/$ARCH/$NAME"
+        done
+    done
+    lipo -create "$STAGING/arm64/AgentAwake" "$STAGING/x86_64/AgentAwake" -output "$APP/Contents/MacOS/AgentAwake"
+    for NAME in agent-awake-hook agent-awake-helper; do
+        lipo -create "$STAGING/arm64/$NAME" "$STAGING/x86_64/$NAME" -output "$APP/Contents/Helpers/$NAME"
+    done
+else
+    swift build -c "$CONFIGURATION"
+    BIN="$(swift build -c "$CONFIGURATION" --show-bin-path)"
+    cp "$BIN/AgentAwake" "$APP/Contents/MacOS/AgentAwake"
+    cp "$BIN/agent-awake-hook" "$APP/Contents/Helpers/agent-awake-hook"
+    cp "$BIN/agent-awake-helper" "$APP/Contents/Helpers/agent-awake-helper"
+fi
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp Resources/com.irshatharis.AgentAwake.helper.plist "$APP/Contents/Library/LaunchDaemons/"
 ICONSET="$PWD/.build/AppIcon.iconset"

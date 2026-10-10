@@ -16,7 +16,7 @@ struct SettingsView: View {
                     Text("Let your agents work. Let your Mac rest.").font(.system(size: 13)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("0.1.0 · Preview").font(.caption).foregroundStyle(.tertiary)
+                Text("\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development") · Preview").font(.caption).foregroundStyle(.tertiary)
             }.padding(26)
             Picker("Settings", selection: $selection) {
                 Text("Setup").tag(0)

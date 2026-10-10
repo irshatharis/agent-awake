@@ -16,12 +16,17 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 
 ## Automated checks
 
-Run `scripts/check.sh`: 27 scenarios and 103 assertions pass on the development Mac.
-The macOS CI build and checks also passed with the display fix. Current coverage:
+Run `scripts/check.sh`: 29 scenarios and 118 assertions pass on the development Mac.
+The earlier macOS CI build and checks passed with the display fix; the new reducer
+regressions have been verified locally. Current coverage:
 
 - Both CLI event sequences: session start, submit, tool, permission wait, result, stop, end.
 - Multiple independent sessions, parent completion while a subagent keeps working.
 - Parallel running tool plus permission-waiting tool; user-question tools.
+- Claude permission requests without a tool ID: single-call correlation, first-event
+  permission tracking, completion cleanup, and preserving parallel active calls.
+- Claude SubagentStop snapshots stored on the parent session, including a snapshot
+  received before a parent event, without retaining background work on a stopped child.
 - Codex interruption, process exit, and PID reuse cleanup.
 - Claude background task snapshot and an observed completion event.
 - Privacy allowlist, malformed input/configuration, private file modes, symlink rejection.
@@ -37,6 +42,16 @@ The macOS CI build and checks also passed with the display fix. Current coverage
 
 These are synthetic events and an injected power backend. They do not change global
 power settings or prove administrator-approved daemon behavior.
+
+## v0.1.1 release packaging (October 10, 2026)
+
+- Release compilation succeeded separately for arm64 and x86_64 using Command Line Tools.
+- The ZIP was extracted into a temporary directory. Strict deep signature verification
+  passed; the app, hook, and helper each contain both executable architectures.
+- The published package is ad-hoc signed and not Apple-notarized. Universal packaging
+  does not verify Intel hardware or older supported macOS behavior.
+- The landing page was checked in Chrome at desktop and mobile widths, including its
+  interactive illustration, setup anchors, FAQ, local assets, and console errors.
 
 ## Live observations
 
@@ -79,7 +94,7 @@ power settings or prove administrator-approved daemon behavior.
 | --- | --- | --- |
 | Prompt starts work | `UserPromptSubmit` | Hooks must be installed/enabled/trusted; bare or disabled-hook sessions are unknown |
 | Tool work | `PreToolUse` / `PostToolUse` | Some specialized or hosted tools do not emit tool hooks; parent turn usually covers them |
-| Permission prompt | `PermissionRequest` | Does not cover every CLI-internal/network approval path |
+| Permission prompt | `PermissionRequest` | Claude omits the tool ID; a single pending call is matched, but parallel requests can be ambiguous. Does not cover every CLI-internal/network approval path |
 | Accepted permission | Next tool/prompt event | **No immediate accepted-and-running event; a long approved tool can be under-counted** |
 | User question | Known question tool / elicitation hooks | Specialized paths may differ |
 | Parent completion | `Stop`, failures where supported | Other Stop hooks can block completion after our hook runs |
@@ -94,6 +109,20 @@ The implementation retains the last observed lifecycle state until another event
 process exit changes it. It does not guess using CPU load or a short inactivity timeout.
 Consequently, incomplete hook sequences can over- or under-count active work. This is a
 known functional limitation, not a solved edge case.
+
+## OSC 7501 investigation (October 10, 2026)
+
+Claude Code's official 2.1.295 changelog confirms native OSC 7501 emission. The protocol
+delivers status through the terminal stream and explicitly provides no record-read query.
+Installed Kitty 0.49.1's watcher list and Screen API were inspected; no program-status
+event or record accessor was found. Kitty's documented watcher and remote-control APIs
+also expose no OSC 7501 status. Migration is deferred pending a usable terminal interface.
+No agent launcher, shell alias, screen scraper, or raw-output logger was introduced.
+Native Codex emission was not confirmed and is not advertised as supported.
+
+The new reducer fixes are tested with synthetic payloads matching the documented Claude
+schema. A live permission/subagent run with these fixes remains pending; passing tests
+does not establish complete hook coverage or solve the post-approval/interrupt gaps.
 
 ## Hardware acceptance checklist (requires a person at the Mac)
 
@@ -121,6 +150,11 @@ known functional limitation, not a solved edge case.
 
 ## Primary references
 
+- [Program Status Protocol specification](https://www.superlogical.com/rex/docs/build/program-status),
+  especially its feature-detection and security sections.
+- [Claude Code 2.1.295 changelog](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md#21295).
+- [Kitty watcher documentation](https://sw.kovidgoyal.net/kitty/launch/#watching-launched-windows)
+  and [remote-control API](https://sw.kovidgoyal.net/kitty/remote-control/).
 - [Claude Code hook reference](https://code.claude.com/docs/en/hooks), particularly Stop,
   PermissionRequest, Notification, background tasks, and subagent fields.
 - [Official OpenAI hook documentation](https://learn.chatgpt.com/docs/hooks), particularly
