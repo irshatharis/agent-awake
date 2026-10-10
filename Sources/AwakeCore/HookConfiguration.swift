@@ -76,12 +76,13 @@ public final class HookInstaller {
             let url = try resolvedConfiguration(config ?? configURL(for: provider))
             let command = HookConfiguration.command(executable: executable, provider: provider)
             // Preserve exact previous commands so relocating the application remains removable.
-            var data = try existing(url)
+            let original = try existing(url)
+            var data = original
             for old in entries where old.provider == provider && old.path == url.path {
                 data = try HookConfiguration.merge(data, provider: provider, command: old.command, remove: true)
             }
             let merged = try HookConfiguration.merge(data, provider: provider, command: command)
-            try replace(url, data: merged)
+            try replace(url, data: merged, expected: original)
             entries.removeAll { $0.provider == provider && $0.path == url.path }
             entries.append(InstalledHook(provider: provider, path: url.path, command: command))
             try JSONEncoder().encode(entries).write(to: manifestURL, options: .atomic)
@@ -90,15 +91,24 @@ public final class HookInstaller {
     }
     public func uninstall() throws {
         try store.locked {
-            let entries = try installed()
-            for entry in entries {
+            var remaining: [InstalledHook] = []
+            var failures: [String] = []
+            for entry in try installed() {
                 let url = URL(fileURLWithPath: entry.path)
-                if let data = try existing(url) {
-                    try replace(url, data: HookConfiguration.merge(data, provider: entry.provider, command: entry.command, remove: true))
+                do {
+                    if let data = try existing(url) {
+                        try replace(url, data: HookConfiguration.merge(data, provider: entry.provider, command: entry.command, remove: true), expected: data)
+                    }
+                } catch {
+                    remaining.append(entry)
+                    failures.append("\(entry.path): \(error.localizedDescription)")
                 }
             }
-            try Data("[]".utf8).write(to: manifestURL, options: .atomic)
+            try JSONEncoder().encode(remaining).write(to: manifestURL, options: .atomic)
             chmod(manifestURL.path, 0o600)
+            if !failures.isEmpty {
+                throw AwakeError.invalidConfiguration("Could not remove hooks from " + failures.joined(separator: "; "))
+            }
         }
     }
     private func resolvedConfiguration(_ url: URL) throws -> URL {
@@ -121,17 +131,16 @@ public final class HookInstaller {
         guard st.st_uid == getuid(), st.st_mode & S_IFMT == S_IFREG, st.st_nlink == 1 else { throw AwakeError.unsafePath }
         return try Data(contentsOf: url)
     }
-    private func replace(_ url: URL, data: Data) throws {
+    private func replace(_ url: URL, data: Data, expected: Data?) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-        let old = try existing(url)
+        // Detect editor saves since `expected` was read, rather than silently overwriting them.
+        guard try existing(url) == expected else { throw AwakeError.invalidConfiguration("Configuration changed during setup. Try again.") }
         // Backups are private and local. They can contain pre-existing user configuration.
-        if let old {
+        if let expected {
             let backup = url.appendingPathExtension("agent-awake-\(UUID().uuidString).bak")
-            try old.write(to: backup, options: .withoutOverwriting)
+            try expected.write(to: backup, options: .withoutOverwriting)
             chmod(backup.path, 0o600)
         }
-        // Detect concurrent editor saves before replacing, rather than silently overwriting them.
-        guard try existing(url) == old else { throw AwakeError.invalidConfiguration("Configuration changed during setup. Try again.") }
         try data.write(to: url, options: .atomic)
         chmod(url.path, 0o600)
     }

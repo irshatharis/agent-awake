@@ -170,14 +170,15 @@ import Darwin
             guard let self else { return }
             guard ok || PowerSystem.sleepDisabled == false else { self.busy = false; self.notice = "Sleep restoration must succeed before removal: \(text)"; return }
             Task { @MainActor in
+                // The root helper goes first: an unreadable hook config must not leave it registered.
                 do {
-                    try HookInstaller().uninstall()
                     if self.helper.status != .notRegistered { try await self.helper.unregister() }
                     if SMAppService.mainApp.status == .enabled { try await SMAppService.mainApp.unregister() }
                     self.loginEnabled = false; self.helperReady = false
-                    self.refreshInstallation(); self.helperStatus = self.helper.status
+                    try HookInstaller().uninstall()
                     self.notice = "Integrations removed. Existing hooks are preserved. You can now quit and delete Agent Awake."
                 } catch { self.notice = "Removal incomplete: \(error.localizedDescription)" }
+                self.refreshInstallation(); self.helperStatus = self.helper.status
                 self.busy = false
             }
         }
