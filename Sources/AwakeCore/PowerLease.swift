@@ -11,6 +11,9 @@ public protocol PowerBackend: AnyObject {
     func sleepDisplays() throws
 }
 
+/// Display sleep for the current lid closure. `checkAt(0)` reads the lid at the next update.
+private enum LidDisplay: Equatable { case open, checkAt(TimeInterval), retryAt(TimeInterval), requested }
+
 /// Serialized by the helper's private queue. Dependency injection makes crash and lease
 /// behavior testable without changing real machine power settings.
 public final class PowerLeaseController {
@@ -21,9 +24,9 @@ public final class PowerLeaseController {
     private var generation = ""
     private var requested = false
     private var recoveryError: String?
-    private var displaySleepRequested = false
-    private var displayRetryAt: TimeInterval = 0
-    private var displayError: String?
+    private var lidDisplay = LidDisplay.checkAt(0)
+    /// Set once lid notifications are registered; until then every update polls the lid.
+    public var lidNotifications = false
 
     public init(backend: PowerBackend, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.backend = backend; self.now = now
@@ -57,13 +60,14 @@ public final class PowerLeaseController {
             } else if !ownership.ownsOverride { _ = ownership.acquire(currentDisabled: true) }
             expiresAt = now() + HelperConstants.leaseSeconds
             updateDisplaySleep()
-            let message = ownership.externalOverride ? "Sleep is also disabled by another tool" : "Closed-lid protection active"
-            return (true, ownership.externalOverride, displayError.map { "\(message) · \($0)" } ?? message)
+            var message = ownership.externalOverride ? "Sleep is also disabled by another tool" : "Closed-lid protection active"
+            if case .retryAt = lidDisplay { message += " · Display sleep request failed" }
+            return (true, ownership.externalOverride, message)
         } catch { return (false, false, error.localizedDescription) }
     }
     @discardableResult public func release() throws -> Bool {
         requested = false; expiresAt = nil
-        resetDisplaySleep()
+        lidDisplay = .checkAt(0)
         do {
             if ownership.ownsOverride || backend.hasJournal {
                 try backend.setDisabled(false)
@@ -80,24 +84,31 @@ public final class PowerLeaseController {
         }
         updateDisplaySleep()
     }
-    private func resetDisplaySleep() {
-        displaySleepRequested = false; displayRetryAt = 0; displayError = nil
+    /// Called on the helper queue for every IOPMrootDomain interest notification.
+    public func lidChanged() {
+        guard requested else { return }
+        if !backend.closedLidWouldSleep { lidDisplay = .open }
+        // Lid notifications arrive in bursts; act once the closure has settled.
+        else if lidDisplay == .open { lidDisplay = .checkAt(now() + 2) }
     }
     private func updateDisplaySleep() {
-        guard requested, let expiry = expiresAt, now() < expiry,
-              backend.disabled == true, backend.closedLidWouldSleep else {
-            resetDisplaySleep()
+        guard requested, let expiry = expiresAt, now() < expiry, backend.disabled == true else {
+            lidDisplay = .checkAt(0)
             return
         }
+        let due: Bool
+        switch lidDisplay {
+        case .checkAt(let at), .retryAt(let at): due = now() >= at
+        case .open, .requested: due = !lidNotifications
+        }
+        guard due else { return }
+        guard backend.closedLidWouldSleep else { lidDisplay = .open; return }
         // One request per lid closure, including a session started with the lid already
         // closed. Do not fight external keyboard/mouse activity or blank an open laptop.
-        guard !displaySleepRequested, now() >= displayRetryAt else { return }
+        guard lidDisplay != .requested else { return }
         do {
             try backend.sleepDisplays()
-            displaySleepRequested = true; displayError = nil
-        } catch {
-            displayError = "Display sleep request failed"
-            displayRetryAt = now() + 5
-        }
+            lidDisplay = .requested
+        } catch { lidDisplay = .retryAt(now() + 5) }
     }
 }

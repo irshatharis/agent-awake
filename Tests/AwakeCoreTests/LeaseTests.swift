@@ -22,7 +22,79 @@ final class FakePower: PowerBackend {
     func sleepIfLidClosed() { operations.append("checkLid") }
 }
 final class LeaseTests {
-    func testDisplaySleepFollowsLidAndActiveLease() throws {
+    func displaySleeps(_ backend: FakePower) -> Int { backend.operations.filter { $0 == "displaySleep" }.count }
+    func testLidNotificationSleepsDisplaysOncePerClosure() throws {
+        let backend = FakePower(); var clock = 0.0
+        let lease = PowerLeaseController(backend: backend, now: { clock })
+        lease.lidNotifications = true
+        _ = lease.renew(awake: true, generation: "a")
+        backend.closedLidWouldSleep = true
+        clock = 5; lease.tick()
+        expectEqual(displaySleeps(backend), 0, "closure without a notification")
+        lease.lidChanged(); clock = 7; lease.tick()
+        expectEqual(displaySleeps(backend), 1)
+        lease.lidChanged(); clock = 9; lease.tick(); _ = lease.renew(awake: true, generation: "a")
+        expectEqual(displaySleeps(backend), 1, "repeated notification while still closed")
+        backend.closedLidWouldSleep = false; lease.lidChanged()
+        backend.closedLidWouldSleep = true; lease.lidChanged()
+        clock = 11; lease.tick()
+        expectEqual(displaySleeps(backend), 2, "re-closing")
+        try lease.release(); backend.operations = []
+        lease.lidChanged(); clock = 13; lease.tick()
+        expectTrue(backend.operations.isEmpty)
+        _ = lease.renew(awake: true, generation: "b")
+        expectEqual(displaySleeps(backend), 1, "starting with the lid closed")
+        backend.closedLidWouldSleep = false; lease.lidChanged()
+        backend.closedLidWouldSleep = true; lease.lidChanged()
+        clock = 30; backend.operations = []; lease.tick()
+        expectEqual(displaySleeps(backend), 0, "expired lease")
+        expectEqual(backend.disabled, false)
+    }
+    func testLidClosureIsDebounced() {
+        let backend = FakePower(); var clock = 0.0
+        let lease = PowerLeaseController(backend: backend, now: { clock })
+        lease.lidNotifications = true
+        _ = lease.renew(awake: true, generation: "a")
+        backend.closedLidWouldSleep = true; lease.lidChanged()
+        clock = 1; lease.tick()
+        backend.closedLidWouldSleep = false; lease.lidChanged()
+        clock = 3; lease.tick()
+        expectEqual(displaySleeps(backend), 0, "closure reopened before settling")
+        backend.closedLidWouldSleep = true; lease.lidChanged()
+        clock = 4; lease.lidChanged(); lease.tick()
+        expectEqual(displaySleeps(backend), 0, "inside the settle window")
+        clock = 5; lease.tick()
+        expectEqual(displaySleeps(backend), 1, "settled closure")
+    }
+    func testLidNotificationNeverSleepsAnOpenLid() {
+        let backend = FakePower(); var clock = 0.0
+        let lease = PowerLeaseController(backend: backend, now: { clock })
+        lease.lidNotifications = true
+        _ = lease.renew(awake: true, generation: "a")
+        for second in 1...11 { lease.lidChanged(); clock = Double(second); lease.tick() }
+        expectEqual(displaySleeps(backend), 0)
+        expectEqual(backend.disabled, true)
+    }
+    func testLidNotificationRetriesFailedRequestWhileClosed() {
+        let backend = FakePower(); var clock = 0.0
+        backend.closedLidWouldSleep = true; backend.failDisplay = true
+        let lease = PowerLeaseController(backend: backend, now: { clock })
+        lease.lidNotifications = true
+        expectTrue(lease.renew(awake: true, generation: "a").2.contains("Display sleep request failed"))
+        clock = 4; lease.tick()
+        expectEqual(displaySleeps(backend), 1)
+        backend.failDisplay = false; clock = 5; lease.tick()
+        expectEqual(displaySleeps(backend), 2)
+        expectFalse(lease.renew(awake: true, generation: "a").2.contains("failed"))
+        backend.closedLidWouldSleep = false; lease.lidChanged()
+        backend.closedLidWouldSleep = true; backend.failDisplay = true; lease.lidChanged()
+        clock = 7; lease.tick()
+        expectEqual(displaySleeps(backend), 3)
+        backend.closedLidWouldSleep = false; lease.lidChanged()
+        clock = 12; lease.tick()
+        expectEqual(displaySleeps(backend), 3, "no retry after the lid opened")
+    }
+    func testDisplaySleepPollsWithoutLidNotifications() throws {
         let backend = FakePower(); var clock = 0.0
         let lease = PowerLeaseController(backend: backend, now: { clock })
         _ = lease.renew(awake: true, generation: "a")
