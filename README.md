@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="Resources/AgentAwake.svg" alt="Agent Awake" width="112" height="112">
+
 # Agent Awake
 
 **Let your agents work. Let your Mac rest.**
@@ -23,7 +25,8 @@ Swift · SwiftUI · macOS 14+ · MIT · Local only
 - Releases prevention after an eight-second grace period when observed work finishes.
 - Offers 15-minute, 30-minute, one-hour, two-hour, custom, and **indefinite** sessions.
   Indefinite mode keeps your terminal reachable over Tailscale between agent tasks.
-- Keeps the display free to turn off. An approved bundled helper controls closed-lid
+- Requests display sleep when the lid closes during protection. This also affects
+  connected external displays. An approved bundled helper controls closed-lid
   prevention on both battery and charger.
 - Includes optional battery cutoff (off by default, initially 20%), launch at login,
   and **Allow sleep now**, which clears manual sessions and pauses automatic mode.
@@ -51,6 +54,11 @@ an app bundle. The build script signs locally with an ad-hoc signature. For a De
 build, set `SIGN_IDENTITY='Developer ID Application: …'` when running the script. Public
 binary distribution should use Developer ID signing and notarization; this repository
 does not contain an Apple signing certificate or claim a notarized release.
+
+Before replacing an installed build, remove its integrations in Diagnostics and quit
+the app. Copy the new build into the existing `/Applications/Agent Awake.app` directory
+with `ditto`, then reopen it and reinstall the integrations. Keep the containing app
+directory in place: moving it can invalidate macOS's helper registration bookmark.
 
 ## Setup
 

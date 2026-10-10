@@ -10,6 +10,7 @@ final class SystemPowerBackend: PowerBackend {
     private var journal: URL { directory.appendingPathComponent("restore-sleep") }
     var disabled: Bool? { PowerSystem.sleepDisabled }
     var hasJournal: Bool { FileManager.default.fileExists(atPath: journal.path) }
+    var lidClosed: Bool { PowerSystem.lidClosed }
     init() throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         var st = stat()
@@ -17,15 +18,30 @@ final class SystemPowerBackend: PowerBackend {
               st.st_mode & 0o077 == 0 else { throw AwakeError.unsafePath }
     }
     func setDisabled(_ value: Bool) throws {
+        try runPMSet(["-a", "disablesleep", value ? "1" : "0"])
+        guard PowerSystem.sleepDisabled == value else { throw AwakeError.helper("macOS rejected the power setting.") }
+    }
+    func sleepDisplays() throws {
+        // Recheck immediately before launching: the user may have reopened the lid.
+        guard PowerSystem.lidClosed else { return }
+        try runPMSet(["displaysleepnow"])
+        Logger(subsystem: HelperConstants.service, category: "display").notice("Requested display sleep for closed lid")
+    }
+    private func runPMSet(_ arguments: [String]) throws {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/pmset")
-        task.arguments = ["-a", "disablesleep", value ? "1" : "0"]
-        task.standardOutput = FileHandle.nullDevice; task.standardError = FileHandle.nullDevice
+        task.arguments = arguments
+        let errors = Pipe()
+        task.standardOutput = FileHandle.nullDevice; task.standardError = errors
         try task.run()
         let deadline = ProcessInfo.processInfo.systemUptime + 2
         while task.isRunning && ProcessInfo.processInfo.systemUptime < deadline { usleep(10_000) }
         if task.isRunning { kill(task.processIdentifier, SIGKILL); throw AwakeError.helper("Power management timed out; recovery will retry.") }
-        guard task.terminationStatus == 0, PowerSystem.sleepDisabled == value else { throw AwakeError.helper("macOS rejected the power setting.") }
+        // pmset can report display errors on stderr while returning success.
+        guard task.terminationStatus == 0,
+              errors.fileHandleForReading.readDataToEndOfFile().isEmpty else {
+            throw AwakeError.helper("macOS rejected the power request.")
+        }
     }
     func recordJournal() throws {
         let fd = open(journal.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0o600)

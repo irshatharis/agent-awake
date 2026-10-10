@@ -27,6 +27,8 @@ func expectThrows<T>(_ value: @autoclosure () throws -> T, file: StaticString = 
 let activity = ActivityTests(), policy = PolicyTests(), config = ConfigurationTests()
 let leases = LeaseTests()
 let tests: [(String, () throws -> Void)] = [
+    ("Display sleep follows lid and lease", leases.testDisplaySleepFollowsLidAndActiveLease),
+    ("Display request failure retry", leases.testDisplaySleepFailureRetriesWithoutDroppingProtection),
     ("Journal before mutation; lease expiry", leases.testJournalBeforeMutationAndLeaseExpiry),
     ("Renewal preserves ownership", leases.testRenewalAndGenerationDoNotDropOwnership),
     ("Helper crash recovery", leases.testHelperCrashRecovery),

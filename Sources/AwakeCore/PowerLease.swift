@@ -3,10 +3,12 @@ import Foundation
 public protocol PowerBackend: AnyObject {
     var disabled: Bool? { get }
     var hasJournal: Bool { get }
+    var lidClosed: Bool { get }
     func setDisabled(_ value: Bool) throws
     func recordJournal() throws
     func clearJournal() throws
     func sleepIfLidClosed()
+    func sleepDisplays() throws
 }
 
 /// Serialized by the helper's private queue. Dependency injection makes crash and lease
@@ -19,6 +21,9 @@ public final class PowerLeaseController {
     private var generation = ""
     private var requested = false
     private var recoveryError: String?
+    private var displaySleepRequested = false
+    private var displayRetryAt: TimeInterval = 0
+    private var displayError: String?
 
     public init(backend: PowerBackend, now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
         self.backend = backend; self.now = now
@@ -51,11 +56,14 @@ public final class PowerLeaseController {
                 _ = ownership.acquire(currentDisabled: false)
             } else if !ownership.ownsOverride { _ = ownership.acquire(currentDisabled: true) }
             expiresAt = now() + HelperConstants.leaseSeconds
-            return (true, ownership.externalOverride, ownership.externalOverride ? "Sleep is also disabled by another tool" : "Closed-lid protection active")
+            updateDisplaySleep()
+            let message = ownership.externalOverride ? "Sleep is also disabled by another tool" : "Closed-lid protection active"
+            return (true, ownership.externalOverride, displayError.map { "\(message) · \($0)" } ?? message)
         } catch { return (false, false, error.localizedDescription) }
     }
     @discardableResult public func release() throws -> Bool {
         requested = false; expiresAt = nil
+        resetDisplaySleep()
         do {
             if ownership.ownsOverride || backend.hasJournal {
                 try backend.setDisabled(false)
@@ -69,6 +77,27 @@ public final class PowerLeaseController {
     public func tick() {
         if recoveryError != nil || (!requested && backend.hasJournal) || (expiresAt.map { now() >= $0 } ?? false) {
             _ = try? release()
+        }
+        updateDisplaySleep()
+    }
+    private func resetDisplaySleep() {
+        displaySleepRequested = false; displayRetryAt = 0; displayError = nil
+    }
+    private func updateDisplaySleep() {
+        guard requested, let expiry = expiresAt, now() < expiry,
+              backend.disabled == true, backend.lidClosed else {
+            resetDisplaySleep()
+            return
+        }
+        // One request per lid closure, including a session started with the lid already
+        // closed. Do not fight external keyboard/mouse activity or blank an open laptop.
+        guard !displaySleepRequested, now() >= displayRetryAt else { return }
+        do {
+            try backend.sleepDisplays()
+            displaySleepRequested = true; displayError = nil
+        } catch {
+            displayError = "Display sleep request failed"
+            displayRetryAt = now() + 5
         }
     }
 }

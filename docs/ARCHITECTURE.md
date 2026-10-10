@@ -56,7 +56,12 @@ before the journal is removed. launchd runs the helper at boot and restarts it o
 startup restores an outstanding journal before accepting leases. An expired lease or
 disconnected client also restores. When the helper releases its owned override with the
 lid closed, it asks IOKit for system sleep; with the lid open it leaves idle sleep alone.
-The helper never changes display brightness or display idle settings. It discovers its
+While a live lease prevents sleep, the helper polls lid state once per second. On a lid
+closure (or when protection starts with the lid closed), it runs the fixed operation
+`/usr/bin/pmset displaysleepnow`. This requests sleep for connected displays, including
+external screens. It runs once per closure, retries a failed request after five seconds,
+and reports failures in Diagnostics. It never issues this command with an open lid or
+an expired lease, and never changes display brightness or display idle settings. It discovers its
 containing bundle with `_NSGetExecutablePath`, since launchd can pass a relative argv[0].
 The build verifies signature discovery with a deliberately relative argv[0].
 

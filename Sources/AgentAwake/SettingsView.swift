@@ -67,7 +67,7 @@ struct SettingsView: View {
                     .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             card {
-                stepHeader("2", "Enable closed-lid protection", detail: "The bundled helper works on battery and charger. Your display remains free to turn off.")
+                stepHeader("2", "Enable closed-lid protection", detail: "Works on battery and charger. During protection, closing the lid requests display sleep, including connected displays.")
                 HStack {
                     Label(helperLabel, systemImage: model.helperStatus == .enabled ? "checkmark.circle.fill" : "lock.circle")
                         .font(.caption).foregroundStyle(model.helperStatus == .enabled ? Color.green : .secondary)
@@ -83,7 +83,7 @@ struct SettingsView: View {
             card {
                 stepHeader("3", "Verify on your Mac", detail: "Start a two-minute session, close the lid, and check your terminal from your phone. Repeat on battery, then let the session expire.")
                 Button("Start two-minute check") { model.startManual(minutes: 2) }.padding(.top, 7)
-                Text("Closed-lid operation is not yet physically verified on this Mac.").font(.caption).foregroundStyle(.orange)
+                Text("Check that the display turns off while the terminal stays reachable. After the timer ends, closing the lid should put the Mac to sleep.").font(.caption).foregroundStyle(.secondary)
             }
             Label {
                 Text("Detection limits: Claude has no interruption hook. Both CLIs can leave a gap after you approve a tool. Use an indefinite session when continuous remote access matters.")

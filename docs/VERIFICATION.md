@@ -10,12 +10,14 @@ event, and a successful `pmset` call is not proof of physical closed-lid behavio
 - Claude Code 2.1.295; Codex CLI 0.162.0.
 - No Developer ID signing identity available. Local app is ad-hoc signed.
 - The helper is registered, running as root, and communicating through authenticated XPC.
-  Physical close-lid testing is in progress; it is not yet marked passed.
+  The user confirmed closed-lid wake prevention on battery and normal lid sleep after
+  timer expiration. The first build kept the panel lit; explicit display sleep was added
+  and is undergoing a separate check with an authenticated helper connection.
 
 ## Automated checks
 
-Run `scripts/check.sh`: 25 scenarios and 89 assertions pass on the development Mac.
-The initial macOS CI run also passed. Current coverage:
+Run `scripts/check.sh`: 27 scenarios and 103 assertions pass on the development Mac.
+Both macOS CI runs before the display fix passed. Current coverage:
 
 - Both CLI event sequences: session start, submit, tool, permission wait, result, stop, end.
 - Multiple independent sessions, parent completion while a subagent keeps working.
@@ -30,6 +32,8 @@ The initial macOS CI run also passed. Current coverage:
 - Journal-before-mutation ordering, heartbeat expiry, helper restart after simulated SIGKILL,
   restoration retry on injected failure, crash between journaling and mutation.
 - Existing external `nosleep`, an observed external `rsleep`, and renewed ownership.
+- Display sleep only during an active closed-lid lease, once per closure; re-closing,
+  starting while closed, release/expiry, and bounded retry after an injected failure.
 
 These are synthetic events and an injected power backend. They do not change global
 power settings or prove administrator-approved daemon behavior.
@@ -53,7 +57,12 @@ power settings or prove administrator-approved daemon behavior.
 - Clean integration removal was exercised on the real configuration: the daemon was
   unregistered, Agent Awake hooks removed, and the Claude dotfile symlink preserved.
   Integrations were then reinstalled.
-- Physical lid/display testing is in progress. Actual helper SIGKILL recovery and real
+- The user confirmed the first two-minute session prevented lid sleep on battery; after
+  expiry, closing the lid put the Mac to sleep. The panel remained lit during protection,
+  prompting the explicit display request. A subsequent observation of a dark panel was
+  inconclusive because the updated helper was not yet connected; it is not counted as
+  successful display-with-awake verification.
+- Actual helper SIGKILL recovery and real
   charger transitions remain pending. They are not advertised as verified.
 
 ## Lifecycle coverage
