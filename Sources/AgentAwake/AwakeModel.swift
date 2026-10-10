@@ -63,6 +63,7 @@ import Darwin
                 self.notice = "Protection stopped: \(message). Resume when the helper is available."
             }
         }
+        removeLegacyClaudeHooks()
         refreshInstallation()
         tick()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -137,10 +138,18 @@ import Darwin
     func resume() { powerFault = false; notice = nil; paused = false; automatic = true; generation = UUID().uuidString; tick() }
     func installCodexHooks() {
         do {
-            try HookInstaller().install(executable: Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agent-awake-hook"))
+            try HookInstaller().install(executable: hookExecutable)
             refreshInstallation()
             notice = "Codex hooks installed. Open /hooks in Codex and review/trust the Agent Awake commands. Restart existing CLI sessions."
         } catch { notice = error.localizedDescription }
+    }
+    private var hookExecutable: URL { Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agent-awake-hook") }
+    private func removeLegacyClaudeHooks() {
+        do {
+            if try HookInstaller().removeLegacyClaudeHooks(executable: hookExecutable) {
+                notice = "Claude Code is now detected automatically. Agent Awake removed the Claude hooks it installed earlier; your other settings and hooks are unchanged."
+            }
+        } catch { notice = "Could not remove Agent Awake's earlier Claude hooks. It will retry at next launch. \(error.localizedDescription)" }
     }
     func refreshInstallation() {
         codexHooksInstalled = (try? HookInstaller().installed())?.contains { $0.provider == .codex } ?? false

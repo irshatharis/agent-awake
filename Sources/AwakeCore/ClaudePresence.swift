@@ -7,9 +7,11 @@ public enum ClaudePresence {
     private static let activities: [String: Activity] = ["busy": .thinking, "shell": .background, "waiting": .waiting, "idle": .idle]
     private static let sizeLimit = 64 * 1024
 
+    public static func configDirectory(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        environment["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
+    }
     public static func directory(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
-        let home = environment["CLAUDE_CONFIG_DIR"].map { URL(fileURLWithPath: $0) }
-        return (home ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")).appendingPathComponent("sessions")
+        configDirectory(environment: environment).appendingPathComponent("sessions")
     }
 
     public static func sessions(in directory: URL = directory(),

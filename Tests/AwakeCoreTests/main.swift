@@ -64,7 +64,8 @@ let tests: [(String, () throws -> Void)] = [
     ("Reject malformed configuration", config.testMalformedConfigIsNotOverwritten),
     ("Private storage and symlinks", config.testPrivateAtomicStoreAndSymlinkRejection),
     ("Unreadable session store recovers", config.testUnreadableStoreDoesNotBlockTracking),
-    ("Partial uninstall keeps failures", config.testUninstallRemovesWhatItCanAndKeepsFailures)
+    ("Partial uninstall keeps failures", config.testUninstallRemovesWhatItCanAndKeepsFailures),
+    ("Legacy Claude hook cleanup", config.testLegacyClaudeHookCleanupPreservesEverythingElse)
 ]
 for (name, test) in tests {
     let before = failures

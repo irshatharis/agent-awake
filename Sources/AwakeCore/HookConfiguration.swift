@@ -79,17 +79,24 @@ public final class HookInstaller {
             chmod(manifestURL.path, 0o600)
         }
     }
-    public func uninstall() throws {
+    public func uninstall() throws { try remove { _ in true } }
+    /// Earlier versions hooked Claude Code. Returns whether any Claude configuration changed.
+    public func removeLegacyClaudeHooks(executable: URL, config: URL? = nil) throws -> Bool {
+        // The manifest can be lost or stale, so also sweep this app's own Claude command.
+        let command = HookConfiguration.shellQuote(executable.path) + " claude --managed-by-agent-awake-v1"
+        let settings = config ?? ClaudePresence.configDirectory().appendingPathComponent("settings.json")
+        let swept = (try? resolvedConfiguration(settings)).flatMap { try? strip(command, from: $0) } ?? false
+        return try remove { $0.provider == .claude } || swept
+    }
+    @discardableResult private func remove(_ matches: (InstalledHook) -> Bool) throws -> Bool {
         try store.locked {
             var remaining: [InstalledHook] = []
             var failures: [String] = []
+            var changed = false
             for entry in try installed() {
-                let url = URL(fileURLWithPath: entry.path)
-                do {
-                    if let data = try existing(url) {
-                        try replace(url, data: HookConfiguration.merge(data, command: entry.command, remove: true), expected: data)
-                    }
-                } catch {
+                guard matches(entry) else { remaining.append(entry); continue }
+                do { changed = try strip(entry.command, from: URL(fileURLWithPath: entry.path)) || changed }
+                catch {
                     remaining.append(entry)
                     failures.append("\(entry.path): \(error.localizedDescription)")
                 }
@@ -99,7 +106,17 @@ public final class HookInstaller {
             if !failures.isEmpty {
                 throw AwakeError.invalidConfiguration("Could not remove hooks from " + failures.joined(separator: "; "))
             }
+            return changed
         }
+    }
+    /// Rewrites (and backs up) a configuration only when it holds the command.
+    private func strip(_ command: String, from url: URL) throws -> Bool {
+        guard let data = try existing(url) else { return false }
+        let updated = try HookConfiguration.merge(data, command: command, remove: true)
+        let parse = { (data: Data) in (try? JSONSerialization.jsonObject(with: data)) as? NSDictionary }
+        guard parse(updated) != parse(data) else { return false }
+        try replace(url, data: updated, expected: data)
+        return true
     }
     private func resolvedConfiguration(_ url: URL) throws -> URL {
         var source = stat()
