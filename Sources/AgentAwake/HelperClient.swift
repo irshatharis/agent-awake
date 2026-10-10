@@ -16,6 +16,15 @@ import AwakeCore
         try await SMAppService.daemon(plistName: HelperConstants.plist).unregister()
         connection?.invalidate(); connection = nil
     }
+    /// Registers again for the current app bundle. macOS rejects a register call made right after
+    /// unregistering, so retry briefly.
+    func reregister() async throws {
+        try await unregister()
+        for attempt in 1...5 {
+            do { try register(); return }
+            catch where attempt < 5 { try await Task.sleep(nanoseconds: 1_000_000_000) }
+        }
+    }
     private func connect() throws -> NSXPCConnection {
         if let connection { return connection }
         let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agent-awake-helper")

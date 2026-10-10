@@ -140,8 +140,20 @@ power settings or prove administrator-approved daemon behavior.
   The app was resumed, the manual test ended, and automatic mode restored afterward.
 - Actual helper SIGKILL recovery and real
   charger transitions remain pending. They are not advertised as verified.
-- Clamshell mode (lid closed with an external display) and helper recovery after an
-  in-place app update are implemented but not yet checked on hardware.
+- Clamshell mode (lid closed with an external display) is implemented but not yet checked
+  on hardware.
+- Helper recovery after an in-place update failed in 0.1.5. After the user replaced 0.1.4
+  with 0.1.5, launchd failed to start the helper 2,756 times with exit 78:
+  `copy_bundle_path(<BTM uuid>) error 0x6f` and "Could not find and/or execute program
+  specified by service". The registration still referred to the deleted bundle, and the
+  Setup tab still showed "Registered with macOS". Calling `register()` on the enabled
+  service changed nothing. Unregistering and registering again failed when done back to
+  back ("Operation not permitted"), and succeeded about two seconds later without a new
+  approval prompt. From 0.1.6 the app registers again whenever its bundle path or inode
+  differs from the one recorded at registration. On the development Mac, an update, a
+  reinstall of the same build, and a plain relaunch were each checked: the first two
+  started a new helper with no launchd spawn failures, and the relaunch left the running
+  helper alone.
 - The IOKit lid notification path is not yet hardware-verified. The earlier dark-panel
   observation used the once-per-second poll it replaced. A read-only probe on the
   development Mac, run as a normal user, registered the `IOPMrootDomain` general-interest
@@ -227,8 +239,8 @@ The Claude hook reducer this section once tested was removed along with Claude h
     session. Diagnostics must read "Closed · clamshell mode". The external display must stay on,
     and the Mac must stay awake after the session ends.
 12. In-place update: with the helper enabled, replace the app in /Applications with a new build
-    and relaunch it. Within a few seconds the helper should log "Helper executable replaced;
-    restarting", and a new session should report closed-lid protection active.
+    and relaunch it. Within about 15 seconds `launchctl print system/com.irshatharis.AgentAwake.helper`
+    should show `job state = running`, and a new session should report closed-lid protection active.
 
 ## Primary references
 

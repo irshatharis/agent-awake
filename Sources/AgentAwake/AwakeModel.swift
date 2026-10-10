@@ -65,6 +65,7 @@ import Darwin
         }
         removeLegacyClaudeHooks()
         refreshInstallation()
+        refreshHelperRegistration()
         tick()
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.tick() }
@@ -154,7 +155,27 @@ import Darwin
     func refreshInstallation() {
         codexHooksInstalled = (try? HookInstaller().installed())?.contains { $0.provider == .codex } ?? false
     }
+    /// The app bundle the helper registration refers to. Replacing the app creates a new bundle.
+    private var bundleIdentity: String {
+        var st = stat()
+        let url = Bundle.main.bundleURL
+        return stat(url.path, &st) == 0 ? "\(url.path)|\(st.st_dev):\(st.st_ino)" : url.path
+    }
+    /// After an update or reinstall, macOS keeps the helper registered against the deleted bundle
+    /// and launchd can no longer find its executable. Registering again points it at this bundle.
+    private func refreshHelperRegistration() {
+        let identity = bundleIdentity
+        guard helper.status == .enabled, defaults.string(forKey: "helperBundle") != identity else { return }
+        Task { @MainActor in
+            do {
+                try await helper.reregister()
+                defaults.set(identity, forKey: "helperBundle")
+            } catch { notice = "The helper needs to be enabled again after this update: \(error.localizedDescription)" }
+            helperStatus = helper.status
+        }
+    }
     func enableHelper() {
+        defaults.set(bundleIdentity, forKey: "helperBundle")
         do { try helper.register(); helperStatus = helper.status; SMAppService.openSystemSettingsLoginItems() }
         catch {
             helperStatus = helper.status

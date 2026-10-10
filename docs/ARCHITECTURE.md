@@ -78,7 +78,7 @@ fixed operation `/usr/bin/pmset -a disablesleep 1`, affecting battery and charge
 Before doing so, it durably records restoration intent in the root-owned, mode-0700
 `/var/db/com.irshatharis.AgentAwake/` directory. Restoring `disablesleep 0` must succeed
 before the journal is removed. launchd runs the helper at boot and restarts it on crash;
-startup restores an outstanding journal before accepting leases. An expired lease or
+startup restores an outstanding journal before accepting leases. Replacing the app leaves the registration pointing at the deleted bundle, so launchd cannot find the new helper. The old helper restores sleep and exits when its executable is replaced, and the app registers the helper again when its bundle path or inode differs from the one recorded at registration. An expired lease or
 disconnected client also restores. When the helper releases its owned override with the
 lid closed, it asks IOKit for system sleep; with the lid open it leaves idle sleep alone.
 A closed lid counts only when IOKit's `AppleClamshellCausesSleep` says macOS would sleep for
