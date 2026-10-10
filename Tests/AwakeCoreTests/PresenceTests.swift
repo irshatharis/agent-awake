@@ -62,9 +62,10 @@ final class PresenceTests {
         let dir = try directory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try write(dir, pid: 300, ["procStart": "Thu Oct  8 11:52:04 2026"])
-        let sessions = ClaudePresence.sessions(in: dir, running: live([300: (claude, 1_791_460_324_000_000)]))
+        let started: UInt64 = 1_791_460_324_000_000
+        let sessions = ClaudePresence.sessions(in: dir, running: live([300: (claude, started)]))
         expectEqual(sessions.map(\.process.pid), [300])
-        let wrongDay = ClaudePresence.sessions(in: dir, running: live([300: (claude, 1_791_460_324_000_000 + 86_400_000_000)]))
+        let wrongDay = ClaudePresence.sessions(in: dir, running: live([300: (claude, started + 86_400_000_000)]))
         expectTrue(wrongDay.isEmpty)
     }
     func testUnsafeAndMalformedFilesSkipped() throws {
